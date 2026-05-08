@@ -17,31 +17,169 @@ designed to be driven by Claude Code skills.
 - **Optional Zulip release workflow** — drip-release materials by date/time
 - **Optional GitHub Pages deployment** on push to `main`
 
-## Forking
+## Instructor Guide — step by step
+
+### Step 0. Prerequisites
+
+Install once:
 
 ```bash
-# 1. Copy this directory to a new repo
-cp -r course-template/ ~/my-course
-cd ~/my-course
-git init && git add -A && git commit -m "fork from course-template"
+# macOS (Homebrew)
+brew install typst gh
+brew install --cask claude-code   # or: npm i -g @anthropic-ai/claude-code
 
-# 2. Open in Claude Code and run the bootstrap skill
+# Linux: see typst.app, github.com/cli/cli, claude.com/claude-code
+```
+
+You'll also need a **textbook PDF** (your course's primary text) and a GitHub
+account.
+
+### Step 1. Fork the template
+
+Pick **one** of these:
+
+```bash
+# Option A: fresh clone (recommended)
+gh repo create my-course --private --template GiggleLiu/course-template --clone
+cd my-course
+
+# Option B: copy locally if the repo isn't on GitHub yet
+cp -r path/to/course-template ~/my-course
+cd ~/my-course
+git init -b main && git add -A && git commit -m "fork from course-template"
+```
+
+### Step 2. Bootstrap the course
+
+Open the repo in Claude Code and run the bootstrap skill:
+
+```bash
 claude
+```
+
+```
 > /bootstrap
 ```
 
-Bootstrap will:
-1. Ask for course code, name, textbook, week count, instructor, institution
-2. Write `config.typ` (course metadata read by every Typst template)
-3. Substitute placeholders (`{{COURSE_CODE}}` etc.) in HTML and workflow files
-4. Ingest your textbook PDF(s) into `textbook/*.md`
-5. Propose and write a weekly schedule to `coursedesign/schedule.typ`
+You will be asked for: course code, course name, textbook author/title/edition,
+week count, instructor, institution, and (optionally) a Zulip stream name.
+Then you'll be asked for your **textbook PDF path(s)**.
 
-After bootstrap, generate week 1:
+What `/bootstrap` produces:
+- `config.typ` (course metadata; every Typst template imports from here)
+- Substituted placeholders in `.github/templates/*.html` and
+  `.github/workflows/release-materials.yml`
+- `textbook/01.md`, `02.md`, … (extracted definitions, theorems, proofs,
+  examples — review and correct these before continuing)
+- `coursedesign/schedule.typ` (weekly section assignments — adjust before
+  continuing)
+
+Verify: `grep -r '{{' .github/` should print nothing (no unfilled placeholders).
+
+### Step 3. Generate your first week
 
 ```
 > /generate-week 1
 ```
+
+This runs the full pipeline: writer + reviewer debate for the learning sheet,
+then writer + reviewer for the test, test variant B, and validation set. You'll
+end up with `week1/1.learning-sheet.typ`, `1.test.typ`, `1.test.B.typ`, and
+`1.validation.typ`.
+
+If you want finer control, use the smaller skills:
+- `/write-learning-sheet 1` — just the learning sheet
+- `/review-learning-sheet 1` — review against quality criteria
+- `/revise 1` — interactive chunk-by-chunk revision
+- `/write-tests 1` — generate tests from a finalized learning sheet
+- `/review-tests 1` — review tests for scope/correctness
+
+### Step 4. Build and preview locally
+
+```bash
+make build && make serve   # opens http://localhost:8000
+```
+
+The site lists every weekly learning sheet with a built-in PDF viewer.
+Single-file iteration:
+
+```bash
+typst compile --root . week1/1.learning-sheet.typ
+```
+
+### Step 5. Push to GitHub & enable Pages
+
+```bash
+git add -A && git commit -m "week 1 materials"
+git push origin main
+```
+
+Then on GitHub: **Settings → Pages → Source: GitHub Actions**. The
+`deploy-pages.yml` workflow rebuilds and publishes on every push to `main` that
+touches `.typ`, `.html`, or the Makefile.
+
+### Step 6. (Optional) Wire up Zulip drip release
+
+If you set a `zulip-stream` in `config.typ`, the `release-materials.yml`
+workflow runs hourly and releases learning sheets / validation answers / test
+answers per a schedule you control.
+
+1. Repo **Settings → Secrets and variables → Actions** → add three secrets:
+   - `ZULIP_BOT_EMAIL`
+   - `ZULIP_BOT_API_KEY`
+   - `ZULIP_SITE` (e.g. `https://yourorg.zulipchat.com`)
+2. Copy the example schedule and edit dates/times (Beijing time):
+
+   ```bash
+   cp coursedesign/release-schedule.example.json coursedesign/release-schedule.json
+   $EDITOR coursedesign/release-schedule.json
+   git add coursedesign/release-schedule.json && git commit -m "release schedule" && git push
+   ```
+
+### Step 7. Iterate weekly
+
+For each subsequent week:
+
+```
+> /generate-week 2
+> /review-learning-sheet 2     # if you skipped the full pipeline
+> /revise 2                    # polish prose, audit tests
+```
+
+```bash
+make build && make serve       # preview
+git add week2/ && git commit -m "week 2" && git push
+```
+
+### Step 8. Grade homework
+
+When students submit homework (mixed PDF / JPG / DOCX in a folder):
+
+```
+> /grade-homework
+> /homework-report             # builds a teacher-facing PDF report
+```
+
+Produces a grades CSV plus per-student feedback, with explicit flags on items
+that need teacher review.
+
+---
+
+### Quick reference — the full skill list
+
+| Skill | When to use |
+|-------|-------------|
+| `/bootstrap` | Once, right after forking |
+| `/generate-week N` | Generate a full week (learning sheet + tests) |
+| `/write-learning-sheet N` | Just write the learning sheet |
+| `/review-learning-sheet N` | Review against pedagogical criteria |
+| `/revise N` | Interactive polish + test audit |
+| `/write-tests N` | Generate tests from a finalized learning sheet |
+| `/review-tests N` | Audit tests for scope & correctness |
+| `/grade-homework` | Grade a folder of student submissions |
+| `/homework-report` | PDF report from grading output |
+| `/learn N` | Student-side: walk through a learning sheet interactively |
+| `/pivot N` | Re-skin a learning sheet's task to a new context |
 
 ## Layout
 
