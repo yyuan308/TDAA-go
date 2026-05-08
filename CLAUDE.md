@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Course materials project. Written in Typst, compiled to PDFs, and served as a static website. Course identity (code, name, textbook, instructor, institution) lives in `config.typ` — read it before generating user-facing content.
+Course materials project. Written in Typst, compiled to PDFs, and served as a static website. Course identity (code, name, textbook, instructor, institution) lives in `config.toml`; `config.typ` is a thin shim that loads the TOML and re-exports the fields for templates. Read `config.toml` before generating user-facing content.
 
 ## Build Commands
 
@@ -16,7 +16,8 @@ typst compile weekN/N.learning-sheet.typ   # Single file
 ## Repository Structure
 
 ```
-config.typ                # Course metadata (course-code, course-name, textbook, instructor, institution)
+config.toml               # Course metadata (course-code, course-name, textbook, instructor, institution)
+config.typ                # Shim that loads config.toml and re-exports fields for Typst templates
 weekN/                    # Weekly materials (N = 1..num-weeks)
 ├── N.intro.typ           # 10-min lecture introduction
 ├── N.learning-sheet.typ  # AI-assisted learning guide
@@ -40,7 +41,7 @@ textbook/                 # Extracted textbook content in markdown (created by /
 
 ## Skills
 
-- `/bootstrap` — one-time: write `config.typ`, ingest textbook PDFs to `textbook/*.md`, create `coursedesign/schedule.typ`, fill in HTML/workflow placeholders
+- `/bootstrap` — one-time: write `config.toml`, ingest textbook PDFs to `textbook/*.md`, create `coursedesign/schedule.typ`, fill in HTML/workflow placeholders
 - `/generate-week N` — full pipeline: learning sheet (adversarial debate) + tests (write + review)
 - `/write-learning-sheet N` — write a single learning sheet (no review)
 - `/review-learning-sheet N` — review a learning sheet (must-have + good-to-have lens)
@@ -53,7 +54,7 @@ textbook/                 # Extracted textbook content in markdown (created by /
 ## Working with Weekly Materials
 
 When generating or editing, always check (in order):
-1. `config.typ` — course-code, course-name, textbook reference
+1. `config.toml` — course-code, course-name, textbook reference
 2. `coursedesign/schedule.typ` — textbook sections assigned to the week
 3. `textbook/*.md` — definitions, theorems, examples to include
 4. `weekN/plan.md` — specific requirements for this week (if it exists)

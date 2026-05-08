@@ -1,0 +1,21 @@
+# Course metadata. Bootstrap copies this to config.toml and fills it in.
+#
+# All Typst templates read these values via the `config.typ` shim
+# (which calls `toml("config.toml")` and re-exports each field).
+# HTML templates and workflows substitute them via {{COURSE_CODE}} etc.
+
+course-code      = "XXX 0000"                     # e.g. "DSAA 3071", "PHYS 2071"
+course-name      = "Course Name"                  # e.g. "Theories in Computing"
+textbook-author  = "Author"                       # e.g. "Sipser"
+textbook-title   = "Textbook Title"               # e.g. "Introduction to the Theory of Computation"
+textbook-edition = "1st ed."                      # e.g. "3rd ed."
+instructor       = "Instructor Name"
+institution      = "Institution"                  # e.g. "HKUST(GZ)"
+
+# Used by the Zulip release workflow. Empty string disables the workflow.
+zulip-stream     = ""                             # e.g. "DSAA3071-2026-Spring"
+
+# Convenience: short reference shown in test/validation footers.
+# Leave empty to default to textbook-author; override if you prefer
+# something like "Sipser §3.1" instead.
+textbook-short   = ""

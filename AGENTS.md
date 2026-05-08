@@ -1,1 +1,1 @@
-See [CLAUDE.md](.claude/CLAUDE.md) for all project instructions.
+See [CLAUDE.md](CLAUDE.md) for all project instructions.

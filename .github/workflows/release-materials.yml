@@ -14,22 +14,35 @@ concurrency:
   group: release-materials
   cancel-in-progress: false
 
-env:
-  # Set this to your Zulip stream name. Bootstrap fills it from config.typ.
-  ZULIP_STREAM: {{ZULIP_STREAM}}
-
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ env.ZULIP_STREAM != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read zulip-stream from config.toml
+        id: cfg
+        run: |
+          if [ ! -f config.toml ]; then
+            echo "No config.toml present; skipping release."
+            echo "stream=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          STREAM=$(python3 -c "import tomllib; print(tomllib.load(open('config.toml','rb')).get('zulip-stream',''))")
+          echo "stream=$STREAM" >> "$GITHUB_OUTPUT"
+          if [ -z "$STREAM" ]; then
+            echo "zulip-stream is empty in config.toml; skipping release."
+          else
+            echo "zulip-stream: $STREAM"
+          fi
+
       - name: Setup Typst
+        if: steps.cfg.outputs.stream != ''
         uses: typst-community/setup-typst@v4
 
       - name: Determine current Beijing time
+        if: steps.cfg.outputs.stream != ''
         id: time
         env:
           TEST_DATETIME: ${{ inputs.test_datetime }}
@@ -47,7 +60,9 @@ jobs:
           echo "Current Beijing time: ${CURRENT_DATE} ${CURRENT_HOUR}:00"
 
       - name: Process scheduled events
+        if: steps.cfg.outputs.stream != ''
         env:
+          ZULIP_STREAM: ${{ steps.cfg.outputs.stream }}
           ZULIP_BOT_EMAIL: ${{ secrets.ZULIP_BOT_EMAIL }}
           ZULIP_BOT_API_KEY: ${{ secrets.ZULIP_BOT_API_KEY }}
           ZULIP_SITE: ${{ secrets.ZULIP_SITE }}

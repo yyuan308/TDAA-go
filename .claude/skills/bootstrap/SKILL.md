@@ -1,13 +1,13 @@
 ---
 name: bootstrap
-description: Use when setting up a new course from a forked template repo — writes config.typ, fills HTML/workflow placeholders, ingests textbook PDFs, and creates the weekly schedule
+description: Use when setting up a new course from a forked template repo — writes config.toml, fills HTML/workflow placeholders, ingests textbook PDFs, and creates the weekly schedule
 ---
 
 # Bootstrap Course
 
 Run once after forking the template repo. Produces:
 
-1. `config.typ` (course metadata read by every Typst template)
+1. `config.toml` (course metadata; the checked-in `config.typ` shim loads it and re-exports the fields for Typst templates)
 2. Substituted placeholders in `.github/templates/*.html` and `.github/workflows/release-materials.yml`
 3. `textbook/*.md` (extracted chapters)
 4. `coursedesign/schedule.typ` (weekly section assignments)
@@ -28,25 +28,31 @@ Use `AskUserQuestion` to collect (one question per field, "Other" for free text)
 | Institution | `HKUST(GZ)` |
 | Zulip stream (optional) | `DSAA3071-2026-Spring` (blank disables release workflow) |
 
-## Step 2: Write `config.typ`
+## Step 2: Write `config.toml`
 
-Copy `config.typ.example` to `config.typ` and fill in the values:
+Copy `config.toml.example` to `config.toml` and fill in the values:
 
-```typst
-#let course-code = "DSAA 3071"
-#let course-name = "Theories in Computing"
-#let textbook-author = "Sipser"
-#let textbook-title = "Introduction to the Theory of Computation"
-#let textbook-edition = "3rd ed."
-#let instructor = "Jin-Guo Liu"
-#let institution = "HKUST(GZ)"
-#let zulip-stream = "DSAA3071-2026-Spring"
-#let textbook-short = textbook-author
+```toml
+course-code      = "DSAA 3071"
+course-name      = "Theories in Computing"
+textbook-author  = "Sipser"
+textbook-title   = "Introduction to the Theory of Computation"
+textbook-edition = "3rd ed."
+instructor       = "Jin-Guo Liu"
+institution      = "HKUST(GZ)"
+zulip-stream     = "DSAA3071-2026-Spring"
+textbook-short   = ""   # empty → falls back to textbook-author
 ```
+
+Do **not** edit `config.typ` — it's a checked-in shim that just calls
+`toml("config.toml")` and re-exports each field, so existing template imports
+(`#import "../config.typ": course-code, ...`) keep working unchanged.
 
 ## Step 3: Substitute placeholders
 
 Replace these tokens in the listed files:
+
+Replace these tokens in `.github/templates/`:
 
 | Token | Replace with | Files |
 |-------|-------------|-------|
@@ -54,12 +60,16 @@ Replace these tokens in the listed files:
 | `{{COURSE_NAME}}` | course name | `.github/templates/*.html` |
 | `{{TEXTBOOK_INFO}}` | `<author>, <em>Title</em> (<edition>)` | `.github/templates/setup-guide.html` |
 | `{{INSTITUTION}}` | institution | `.github/templates/setup-guide.html` |
-| `{{ZULIP_STREAM}}` | zulip stream (or empty string) | `.github/workflows/release-materials.yml` |
 
-Use a single `sed -i` pass per file, or read+Edit. Verify no `{{...}}` tokens remain:
+The `release-materials.yml` workflow reads `zulip-stream` from `config.toml`
+at runtime, so no substitution is needed there. Verify no course-level
+`{{...}}` tokens remain in templates (placeholders like `{{WEEK}}`,
+`{{TITLE}}`, `{{FILENAME}}`, `{{PAGES_JSON}}` are filled per-build by the
+Makefile and should still be present):
 
 ```bash
-grep -r '{{' .github/ && echo "ERROR: unfilled placeholders" || echo "OK"
+grep -rE '\{\{(COURSE_CODE|COURSE_NAME|TEXTBOOK_INFO|INSTITUTION)\}\}' .github/ \
+  && echo "ERROR: unfilled placeholders" || echo "OK"
 ```
 
 ## Step 4: Ingest textbook

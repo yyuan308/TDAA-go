@@ -66,7 +66,9 @@ week count, instructor, institution, and (optionally) a Zulip stream name.
 Then you'll be asked for your **textbook PDF path(s)**.
 
 What `/bootstrap` produces:
-- `config.typ` (course metadata; every Typst template imports from here)
+- `config.toml` (course metadata; the checked-in `config.typ` shim loads it
+  and re-exports each field, so every Typst template imports from `config.typ`
+  but the values you edit live in `config.toml`)
 - Substituted placeholders in `.github/templates/*.html` and
   `.github/workflows/release-materials.yml`
 - `textbook/01.md`, `02.md`, … (extracted definitions, theorems, proofs,
@@ -120,7 +122,7 @@ touches `.typ`, `.html`, or the Makefile.
 
 ### Step 6. (Optional) Wire up Zulip drip release
 
-If you set a `zulip-stream` in `config.typ`, the `release-materials.yml`
+If you set a `zulip-stream` in `config.toml`, the `release-materials.yml`
 workflow runs hourly and releases learning sheets / validation answers / test
 answers per a schedule you control.
 
@@ -184,7 +186,8 @@ that need teacher review.
 ## Layout
 
 ```
-config.typ.example                   # Edit (or run /bootstrap) → config.typ
+config.toml.example                  # Edit (or run /bootstrap) → config.toml
+config.typ                           # Shim that loads config.toml for templates
 Makefile                             # `make build` / `make serve`
 templates/                           # Typst libraries (do not edit per-week)
 ├── learning-sheet.typ               # Shared lib: theorem envs, prompt blocks
@@ -210,7 +213,7 @@ coursedesign/
 After bootstrap, you'll also have:
 
 ```
-config.typ                           # Course metadata
+config.toml                          # Course metadata (filled by /bootstrap)
 textbook/NN.md                       # Extracted textbook chapters
 coursedesign/schedule.typ            # Weekly section assignments
 weekN/                               # Per-week materials (created by /generate-week)
