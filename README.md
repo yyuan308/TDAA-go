@@ -275,5 +275,6 @@ typst compile weekN/N.learning-sheet.typ
 If TDAA-Go shapes a course you teach or a paper you write, please cite the
 methodology paper this template was extracted from:
 
-> Liu, J.-G. *High-Frequency Test-Driven Learning with AI: Making Strict
-> Quality Gates Acceptable and Scalable.* DSAA 3071, HKUST(GZ), Spring 2026.
+> Jin-Guo Liu, Shang-Qi Lu, Xin-Ran Shi, Long-Li Zheng and Wei Wang.
+> *High-Frequency Test-Driven Learning with AI: Making Strict Quality Gates
+> Acceptable and Scalable.* DSAA 3071, HKUST(GZ), Spring 2026.

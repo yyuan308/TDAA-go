@@ -1,8 +1,10 @@
-.PHONY: all clean serve build pdfs viewers index setup-guide about instructor-guide student-guide styles compile-tests dump-solutions help watch serve-only
+.PHONY: all clean serve build pdfs viewers index setup-guide about instructor-guide student-guide styles assets compile-tests dump-solutions help watch serve-only
 
 # Output directory
 SITE_DIR := _site
 PDF_DIR := $(SITE_DIR)/pdfs
+ASSET_DIR := $(SITE_DIR)/assets
+FIG_MAIN_SRC := .github/templates/assets/fig-main.svg
 
 # Course metadata source — prefer config.toml, fall back to the example.
 CFG_FILE := $(shell [ -f config.toml ] && echo config.toml || echo config.toml.example)
@@ -50,6 +52,9 @@ $(SITE_DIR):
 
 $(PDF_DIR): $(SITE_DIR)
 	mkdir -p $(PDF_DIR)
+
+$(ASSET_DIR): $(SITE_DIR)
+	mkdir -p $(ASSET_DIR)
 
 # Compile learning sheets to PDFs
 pdfs: $(PDF_DIR)
@@ -127,13 +132,18 @@ styles: $(SITE_DIR)
 	@echo "🎨 Copying styles..."
 	cp .github/templates/styles.css $(SITE_DIR)/styles.css
 
+# Copy static page assets
+assets: $(ASSET_DIR) $(FIG_MAIN_SRC)
+	@echo "🖼️  Copying static assets..."
+	cp $(FIG_MAIN_SRC) $(SITE_DIR)/assets/fig-main.svg
+
 # Render setup guide (substitute course placeholders from config.toml)
 setup-guide: $(SITE_DIR) styles
 	@echo "📚 Rendering setup guide..."
 	@$(SUB_HTML) .github/templates/setup-guide.html > $(SITE_DIR)/setup-guide.html
 
 # Render About TDAA page
-about: $(SITE_DIR) styles
+about: $(SITE_DIR) styles assets
 	@echo "📖 Rendering About TDAA page..."
 	@$(SUB_HTML) .github/templates/about.html > $(SITE_DIR)/about.html
 
