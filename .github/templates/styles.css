@@ -677,16 +677,24 @@ pre code {
    ============================================================ */
 
 .method-figure {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 1.5rem 0 1.8rem;
   padding: 1rem 0;
   border-top: 1px solid var(--hairline);
   border-bottom: 1px solid var(--hairline);
+  overflow-x: hidden;
 }
 
 .method-figure img {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: auto;
+  object-fit: contain;
 }
 
 .method-figure figcaption {
@@ -1174,6 +1182,8 @@ body.compact footer {
 @media (max-width: 720px) {
   body { font-size: 17px; }
   .container { padding: 2.5rem 1.25rem 4rem; }
+  .method-figure { max-width: calc(100vw - 2.5rem); }
+  .method-figure img { width: 100%; }
 
   /* Header: stack title row above the nav row instead of squeezing. */
   .header-content {
