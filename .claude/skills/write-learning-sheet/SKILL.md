@@ -23,12 +23,23 @@ Create `weekN/N.learning-sheet.typ`.
 
 ## Hard Rules
 
-- Include EVERY definition and theorem from assigned textbook sections
+- Include EVERY definition and **key result** (theorems for math/CS; laws, postulates, principles, governing equations for physics / engineering / empirical sciences) from assigned textbook sections
 - Define before use — no forward references
 - FIDS is a mindset, NOT explicit boxes
 - Blog-like prose, not fragmented bullets
 - No page breaks between parts (only first page has pagebreak)
 - No author footnotes
+
+### Which environment to use
+
+The template provides two parallel sets of boxed environments, same visual style:
+
+| Course type | Box for named result | Box for justification |
+|-------------|----------------------|-----------------------|
+| Math / CS / theory | `#theorem(...)[...]` | `#proof[...]` |
+| Physics / engineering / empirical | `#keyresult(numbering: none, title: [Newton's Second Law])[...]` | `#derivation[...]` |
+
+Pick one set per course (read `textbook/*.md` and `weekN/plan.md` to decide — if the source material proves things from axioms, use theorem/proof; if it states laws and derives consequences, use keyresult/derivation). The "Proof Quality" criteria in `CLAUDE.md` apply identically to `#derivation` — read *key insight* as *physical insight*, *why non-trivial* as *what naïve picture this overturns*.
 
 ---
 

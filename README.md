@@ -192,6 +192,34 @@ When students submit homework (mixed PDF / JPG / DOCX in a folder):
 Produces a grades CSV plus per-student feedback, with explicit flags on items
 that need teacher review.
 
+### Step 8b. (Optional) Zulip-based submission and feedback
+
+If your students already use Zulip, you can skip the "manage a folder of
+files" workflow entirely: students DM a course-specific bot with photos of
+their homework, you run one command to pull + grade + DM feedback back.
+
+```
+> /setup-zulip-grading         # one-time: creates the bot, writes .zuliprc, seeds roster
+> /zulip-mark-feedback N       # per homework: pulls DMs, grades, sends feedback
+```
+
+`/setup-zulip-grading` walks you through getting a personal Zulip API key,
+creates a generic bot in your realm via the API (no manual UI clicks unless
+your realm restricts bot creation), and bootstraps `coursedesign/roster.csv`
+(committed; the Zulip-email → student-id mapping).
+
+`/zulip-mark-feedback N` has four checkpointed phases:
+
+1. **Pull** — fetches DMs in the active window, drops attachments into
+   `weekN/submissions/` with the filename convention `/grade-homework` expects.
+2. **Grade** — delegates to the unchanged `/grade-homework`.
+3. **Report** — optionally delegates to `/homework-report`.
+4. **Send** — DMs each student their `feedback/<student_id>.md` back via the
+   bot. Default is "preview locally first" — nothing goes out until you say so.
+
+State files (`.zuliprc`, `week*/submissions/`, `week*/zulip-*.json`) are
+gitignored. The roster is committed.
+
 ---
 
 ### Quick reference — the full skill list
@@ -207,6 +235,8 @@ that need teacher review.
 | `/review-tests N` | Audit tests for scope & correctness |
 | `/grade-homework` | Grade a folder of student submissions |
 | `/homework-report` | PDF report from grading output |
+| `/setup-zulip-grading` | Once: create a Zulip grading bot + bootstrap the student roster |
+| `/zulip-mark-feedback N` | Per HW: pull DMs from the bot, grade, DM feedback back |
 | `/learn N` | Student-side: walk through a learning sheet interactively |
 | `/pivot N` | Re-skin a learning sheet's task to a new context |
 

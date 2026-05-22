@@ -91,16 +91,15 @@
 
 #prompt[
   #badge-deeper *1.0 — TITLE*  // ← EDIT
-  ```
-  Prompt text.
-  ```
+
+  Prompt text. Inline math like $x^2 + 1$ typesets normally; do not wrap the
+  prompt body in a code block (\`\`\`...\`\`\`) — that disables math rendering.
 ]
 
 #prompt[
   #badge-broader *1.1 — TITLE*  // ← EDIT
-  ```
+
   Prompt connecting to real-world applications.
-  ```
 ]
 
 // =============================================================================

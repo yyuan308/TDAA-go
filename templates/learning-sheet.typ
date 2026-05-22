@@ -22,6 +22,16 @@
   fill: box-fill, stroke: none, inset: (x: 12pt, y: 10pt))
 #let proof = thmproof("proof", "Proof")
 
+// Key-result box for courses without theorems (physics, engineering,
+// empirical sciences). Same visual style as `theorem` / `definition`, but
+// used to present named laws / postulates / principles / equations.
+// Pass `title:` with the actual physical name; pair with `derivation` instead
+// of `proof` if you want a labeled justification block.
+//   #keyresult(numbering: none, title: [Newton's Second Law])[$F = m a$ ...]
+#let keyresult = thmbox("keyresult", "Key Result", base: none,
+  fill: box-fill, stroke: none, inset: (x: 12pt, y: 10pt))
+#let derivation = thmproof("derivation", "Derivation")
+
 // Content elements
 #let pythoncode(body) = block(
   width: 100%, fill: rgb("#f5f5f5"),
@@ -95,9 +105,8 @@
 #let setup-prompt() = {
   prompt[
     *Setup.* Send the lecture note content to AI and type:
-    ```
+
     Summarize.
-    ```
   ]
   text(size: 9pt, fill: gray)[*How to use?* Start an AI chat and work through the exercises. #box(baseline: 2pt)[#badge-deeper] practice & theory · #box(baseline: 2pt)[#badge-broader] applications & frontiers]
 }
@@ -107,17 +116,15 @@
   v(8pt)
   prompt[
     #badge-broader *Open Problems*
-    ```
+
     Are there unsolved problems in this area?
-    ```
   ]
   v(10pt)
   line(length: 100%, stroke: 0.5pt + rule-color)
   v(8pt)
   prompt[
     *Wrap up.*
-    ```
+
     Summarize our discussion in markdown.
-    ```
   ]
 }

@@ -55,6 +55,8 @@ textbook/                 # Extracted textbook content in markdown (created by /
 - `/review-tests N` — review tests for scope alignment, correctness, and consistency
 - `/grade-homework` — grade a folder of student submissions against a teacher solutions doc; produces a CSV and per-student feedback
 - `/homework-report` — after `/grade-homework`, build a teacher-facing PDF report with per-student marks and feedback
+- `/setup-zulip-grading` — one-time: create a course grading bot on Zulip, write `.zuliprc`, bootstrap `coursedesign/roster.csv` (enables phone-photo submissions via DM)
+- `/zulip-mark-feedback N` — pull homework photos students DM'd to the bot, delegate to `/grade-homework` + optional `/homework-report`, then DM per-student feedback back
 
 ## Working with Weekly Materials
 

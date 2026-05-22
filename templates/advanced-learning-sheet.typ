@@ -37,6 +37,13 @@
   fill: accent-light, stroke: none, inset: (x: 12pt, y: 10pt))
 #let proof = thmproof("proof", "Proof")
 
+// Key-result box for non-axiomatic courses (physics, engineering, empirical
+// sciences). Same styling as `theorem`; intended for named laws / postulates
+// / principles. Pair with `derivation` instead of `proof` when relevant.
+#let keyresult = thmbox("keyresult", "Key Result", base: none,
+  fill: accent-light, stroke: none, inset: (x: 12pt, y: 10pt))
+#let derivation = thmproof("derivation", "Derivation")
+
 #let example(title, body) = block(
   width: 100%, inset: (left: 0pt, y: 8pt),
   stroke: none
