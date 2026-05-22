@@ -1,5 +1,7 @@
 # TDAA-Go
 
+[![Instructor guide](https://img.shields.io/badge/Instructor%20guide-open-2563eb)](https://giggleliu.github.io/TDAA-Go/instructor-guide.html)
+
 A forkable, ready-to-launch skeleton for **Test-Driven, AI-Assisted (TDAA)**
 courses. Weekly learning sheets, closed-book tests, validation sets, and a
 static website — all written in Typst, built by `make`, deployed to GitHub
