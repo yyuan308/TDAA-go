@@ -1,6 +1,7 @@
 # TDAA-Go
 
 [![Instructor guide](https://img.shields.io/badge/Instructor%20guide-open-2563eb)](https://giggleliu.github.io/TDAA-Go/instructor-guide.html)
+[![Documentation](https://img.shields.io/badge/Documentation-GitHub%20Pages-brightgreen)](https://giggleliu.github.io/TDAA-Go/)
 
 A forkable, ready-to-launch skeleton for **Test-Driven, AI-Assisted (TDAA)**
 courses. Weekly learning sheets, closed-book tests, validation sets, and a
@@ -11,6 +12,11 @@ Pages, and driven by Claude Code skills.
 > closed-book tests require them to think *unaided*. TDAA-Go is the
 > course-materials harness that makes the gate livable for students and the
 > production tractable for instructors.
+
+> **Status:** TDAA-Go is under active development and not yet stable.
+> Interfaces, skill names, and file layouts may change between releases.
+> We welcome feedback, bug reports, and feature requests — please open an
+> [issue](https://github.com/GiggleLiu/TDAA-Go/issues).
 
 ## Quick start
 
@@ -24,15 +30,6 @@ claude              # then in Claude Code:
 
 Need anything else installed (Typst, `uv`, `gh`)? `/bootstrap` probes and
 offers the right install command for your platform.
-
-## Documentation
-
-The full instructor guide lives in the deployed site. After `make build`,
-open `_site/instructor-guide.html` (or `make serve` and visit
-<http://localhost:8000/instructor-guide.html>). It covers install, fork,
-bootstrap, generate, the review habit, publish, the weekly classroom rhythm,
-and grading. Students get a parallel `student-guide.html`; the method itself
-is on `about.html`.
 
 ## Skills
 
@@ -51,38 +48,6 @@ is on `about.html`.
 | `/zulip-mark-feedback N` | Per HW: pull DMs from the bot, grade, DM feedback back |
 | `/learn N` | Student-side: walk through a learning sheet interactively |
 | `/pivot N` | Re-skin a learning sheet's task to a new context |
-
-## Build commands
-
-```bash
-make build              # PDFs + HTML viewers + guides
-make serve              # build, then http://localhost:8000
-make compile-tests      # test/validation PDFs
-make dump-solutions     # same, solutions visible
-make clean              # remove _site/
-```
-
-Single file: `typst compile --root . weekN/N.learning-sheet.typ`.
-
-## Layout
-
-```
-config.toml.example                  # Edit (or run /bootstrap) → config.toml
-config.typ                           # Shim that loads config.toml for templates
-Makefile                             # make build / make serve
-templates/                           # Shared Typst libs (learning-sheet, test, week-template/)
-coursedesign/
-├── weekly-materials-guide.md        # Pedagogical principles & checklists
-├── schedule.example.typ             # Example schedule (bootstrap fills the real one)
-└── release-schedule.example.json    # Example Zulip release schedule
-.github/
-├── templates/                       # index, viewer, about, instructor-guide, student-guide, styles.css
-└── workflows/                       # deploy-pages.yml, release-materials.yml (Zulip drip, optional)
-.claude/                             # CLAUDE.md, rules/, skills/
-```
-
-After bootstrap, you'll also have `config.toml`, `textbook/NN.md` (extracted
-chapters), `coursedesign/schedule.typ`, and `weekN/` (per-week materials).
 
 ## Citing TDAA
 

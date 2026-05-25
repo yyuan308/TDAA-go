@@ -47,6 +47,7 @@
         <li><a href="#publish"><span class="toc-number">05</span> Build and publish</a></li>
         <li><a href="#rhythm"><span class="toc-number">06</span> The weekly rhythm</a></li>
         <li><a href="#grade"><span class="toc-number">07</span> Grade submitted work</a></li>
+        <li><a href="#zulip"><span class="toc-number">08</span> Zulip integration</a></li>
       </ol>
     </nav>
 
@@ -208,20 +209,6 @@ git add week1 &amp;&amp; git commit -m "week 1" &amp;&amp; git push</code></pre>
         set <strong>Source</strong> to <code>GitHub Actions</code>.
       </p>
 
-      <div class="callout">
-        <div class="callout-title">Optional · Zulip drip release</div>
-        <p style="margin-bottom:0;">
-          Set <code>zulip-stream</code> in <code>config.toml</code> and
-          add the <code>ZULIP_BOT_EMAIL</code>,
-          <code>ZULIP_BOT_API_KEY</code>, and <code>ZULIP_SITE</code>
-          repo secrets, then copy
-          <code>coursedesign/release-schedule.example.json</code> to
-          <code>release-schedule.json</code> and edit dates/times. The
-          hourly <code>release-materials.yml</code> workflow then drips
-          learning sheets, validation answers, and test answers on
-          schedule. Leave <code>zulip-stream</code> empty to disable.
-        </p>
-      </div>
     </section>
 
     <section class="section" id="rhythm">
@@ -278,23 +265,98 @@ git add weekN &amp;&amp; git commit -m "week N" &amp;&amp; git push</code></pre>
         feedback helps the next learning cycle.
       </p>
 
+    </section>
+
+    <section class="section" id="zulip">
+      <header class="section-header">
+        <span class="section-number">§ 08</span>
+        <h2 class="section-title">Zulip <em>integration</em></h2>
+      </header>
+
+      <p>
+        <a href="https://zulip.com" target="_blank">Zulip</a> is an
+        open-source chat platform with a first-class API and topic-threaded
+        conversations. Those two properties make it uniquely suited for
+        <strong>AI-agent workflows</strong>: bots can post, read, and
+        react to messages programmatically, and the topic threading keeps
+        automated posts neatly separated from human discussion. TDAA-Go
+        uses Zulip as its optional delivery and feedback channel.
+      </p>
+
+      <h3>What you can do with it</h3>
+
+      <ul>
+        <li>
+          <strong>Scheduled material release.</strong>
+          Learning sheets, validation-sheet answers, and test answers are
+          posted to a course stream on a timetable you define — for
+          example, releasing the validation answers two days after the
+          test. A GitHub Actions cron job checks the schedule hourly and
+          drips the right PDF at the right time, so students see a steady
+          stream of materials without manual uploads.
+        </li>
+        <li>
+          <strong>Homework submission by photo.</strong>
+          Students snap a photo of their handwritten work and DM it to a
+          course-specific bot — no file-naming conventions, no LMS upload
+          forms. The bot collects every image in a per-student thread,
+          ready for the instructor to pull.
+        </li>
+        <li>
+          <strong>AI-graded feedback delivery.</strong>
+          The instructor runs a single command
+          (<code>/zulip-mark-feedback N</code>) that pulls submitted
+          photos, grades them with AI against the rubric, and DMs
+          per-student feedback back through the same bot. Students get
+          individual, private feedback within hours instead of days.
+        </li>
+      </ul>
+
+      <h3>Setup</h3>
+
+      <p>
+        <strong>1. Create the grading bot</strong> (one-time):
+      </p>
+<pre><code>&gt; /setup-zulip-grading</code></pre>
+      <p>
+        This creates a bot on your Zulip realm, writes <code>.zuliprc</code>
+        (gitignored) with its credentials, and bootstraps
+        <code>coursedesign/roster.csv</code> so submissions map to student IDs.
+      </p>
+
+      <p>
+        <strong>2. Enable scheduled releases</strong> (optional):
+      </p>
+      <p>
+        Set <code>zulip-stream</code> in <code>config.toml</code> and
+        add <code>ZULIP_BOT_EMAIL</code>, <code>ZULIP_BOT_API_KEY</code>,
+        and <code>ZULIP_SITE</code> as repo secrets. Then copy
+        <code>coursedesign/release-schedule.example.json</code> to
+        <code>release-schedule.json</code> and fill in dates and times.
+        The hourly <code>release-materials.yml</code> workflow handles
+        the rest. Leave <code>zulip-stream</code> empty to disable.
+      </p>
+
+      <p>
+        <strong>3. Grade and return feedback</strong> (per homework):
+      </p>
+<pre><code>&gt; /zulip-mark-feedback N</code></pre>
+      <p>
+        Pulls DMs into <code>weekN/submissions/</code>, delegates to
+        <code>/grade-homework</code>, optionally builds a teacher-facing
+        report, and previews the feedback messages before sending them.
+      </p>
+
       <div class="callout">
-        <div class="callout-title">Optional · Zulip submission and feedback</div>
-        <p>
-          If your students already use Zulip, they can DM homework photos
-          to a course-specific bot. The instructor can then pull
-          submissions, grade them, and return feedback through the same
-          workflow:
-        </p>
-<pre><code>&gt; /setup-zulip-grading
-&gt; /zulip-mark-feedback N</code></pre>
+        <div class="callout-title">Why Zulip?</div>
         <p style="margin-bottom:0;">
-          <code>/setup-zulip-grading</code> creates the bot, writes
-          <code>.zuliprc</code>, and seeds <code>coursedesign/roster.csv</code>.
-          <code>/zulip-mark-feedback N</code> pulls DMs into
-          <code>weekN/submissions/</code>, delegates grading to
-          <code>/grade-homework</code>, optionally builds the report, and
-          previews feedback before sending DMs back to students.
+          Unlike most LMS platforms, Zulip's API is designed for bots and
+          automation from the ground up. Any AI agent — not just
+          TDAA-Go's built-in skills — can interact with students through
+          the same channels: answering questions, posting announcements,
+          or collecting submissions. The open-source, self-hostable
+          nature means your data stays on your infrastructure, which
+          matters for student privacy.
         </p>
       </div>
     </section>
