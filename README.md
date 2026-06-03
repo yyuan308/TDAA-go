@@ -1,7 +1,7 @@
 # TDAA-Go
 
-[![Instructor guide](https://img.shields.io/badge/Instructor%20guide-open-2563eb)](https://giggleliu.github.io/TDAA-Go/instructor-guide.html)
-[![Demo site](https://img.shields.io/badge/Demo%20site-live-brightgreen)](https://giggleliu.github.io/TDAA-Go/)
+[![Instructor guide](https://img.shields.io/badge/Instructor%20guide-open-2563eb)](https://tdaa-go.github.io/TDAA-Go/instructor-guide.html)
+[![Demo site](https://img.shields.io/badge/Demo%20site-live-brightgreen)](https://tdaa-go.github.io/TDAA-Go/)
 
 A forkable, ready-to-launch skeleton for **Test-Driven, AI-Assisted (TDAA)**
 courses. Weekly learning sheets, closed-book tests, validation sets, and a
@@ -16,12 +16,12 @@ Pages, and driven by Claude Code skills.
 > **Status:** TDAA-Go is under active development and not yet stable.
 > Interfaces, skill names, and file layouts may change between releases.
 > We welcome feedback, bug reports, and feature requests — please open an
-> [issue](https://github.com/GiggleLiu/TDAA-Go/issues).
+> [issue](https://github.com/TDAA-Go/TDAA-Go/issues).
 
 ## Quick start
 
 ```bash
-gh repo create my-course --private --template GiggleLiu/TDAA-Go --clone
+gh repo create my-course --private --template TDAA-Go/TDAA-Go --clone
 cd my-course
 claude              # then in Claude Code:
 > /bootstrap        # asks a few questions, writes config.toml, extracts the textbook
