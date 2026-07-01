@@ -1,0 +1,9 @@
+{
+  "dataset": "physics_week9",
+  "openai_model": "gpt-5.4",
+  "deepseek_model": "deepseek-v4-pro",
+  "runs_per_condition": 3,
+  "split_seed": 20260701,
+  "bootstrap_samples": 10000,
+  "max_retries": 2
+}
