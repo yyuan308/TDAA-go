@@ -76,8 +76,7 @@ class BenchmarkImportTests(unittest.TestCase):
     def test_physics_package_imports(self):
         from benchmark import physics
 
-        self.assertEqual(physics.QUESTION_IDS[0], "Q1a")
-        self.assertEqual(physics.QUESTION_IDS[-1], "Q3f")
+        self.assertEqual(physics.__name__, "benchmark.physics")
 
 
 if __name__ == "__main__":
@@ -109,14 +108,8 @@ Add to `[project.scripts]`:
 physics-benchmark = "benchmark.physics.cli:main"
 ```
 
-Create `benchmark/__init__.py` as an empty file. Create
-`benchmark/physics/__init__.py`:
-
-```python
-from .schema import QUESTION_IDS
-
-__all__ = ["QUESTION_IDS"]
-```
+Create `benchmark/__init__.py` and `benchmark/physics/__init__.py` as empty
+package marker files. Task 2 exports `QUESTION_IDS` after `schema.py` exists.
 
 - [ ] **Step 4: Create the local environment and install the project**
 
