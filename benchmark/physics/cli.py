@@ -9,9 +9,17 @@ from pathlib import Path
 from collections.abc import Sequence
 from typing import Any
 
-from .codex_import import score_records_from_payload
+from .baseline import import_baseline_run
+from .codex_import import (
+    create_human_review_csv,
+    import_codex_packet,
+    score_records_from_payload,
+)
+from .deepseek_runs import run_deepseek_condition
 from .gold import create_score_template
+from .packets import build_blind_packet
 from .privacy import assert_anonymous_name, assert_privacy_approved
+from .providers import DeepSeekProvider
 from .runner import (
     ValidationFailure,
     create_run_directory,
@@ -80,6 +88,38 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--split", choices=("dev", "test"), required=True)
     run_parser.add_argument("--repetition", type=int, required=True)
 
+    packet_parser = subparsers.add_parser(
+        "build-packet", help="build an isolated Codex packet"
+    )
+    packet_parser.add_argument("--root", type=Path, required=True)
+    packet_parser.add_argument(
+        "--condition", choices=("T1", "G2", "G3"), required=True
+    )
+    packet_parser.add_argument("--split", choices=("dev", "test"), required=True)
+    packet_parser.add_argument("--repetition", type=int, required=True)
+
+    import_codex_parser = subparsers.add_parser(
+        "import-codex", help="import a completed Codex packet"
+    )
+    import_codex_parser.add_argument("--root", type=Path, required=True)
+    import_codex_parser.add_argument("--packet", type=Path, required=True)
+
+    human_parser = subparsers.add_parser(
+        "human-review", help="create the human transcript review CSV"
+    )
+    human_parser.add_argument("--root", type=Path, required=True)
+    human_parser.add_argument("--split", choices=("dev", "test"), required=True)
+
+    deepseek_parser = subparsers.add_parser(
+        "run-deepseek", help="grade frozen text with DeepSeek"
+    )
+    deepseek_parser.add_argument("--root", type=Path, required=True)
+    deepseek_parser.add_argument(
+        "--condition", choices=("D1", "D2"), required=True
+    )
+    deepseek_parser.add_argument("--split", choices=("dev", "test"), required=True)
+    deepseek_parser.add_argument("--repetition", type=int, required=True)
+
     freeze_parser = subparsers.add_parser("freeze", help="seal the held-out workflow")
     freeze_parser.add_argument("--root", type=Path, required=True)
     freeze_parser.add_argument("--candidate", required=True)
@@ -97,9 +137,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "validate":
             validate_workspace(args.root)
         elif args.command == "import-baseline":
-            raise NotImplementedError("import-baseline command is not implemented yet")
+            print(import_baseline_run(args.root))
         elif args.command == "run":
             run_condition(args.root, args.condition, args.split, args.repetition)
+        elif args.command == "build-packet":
+            print(
+                build_blind_packet(
+                    args.root,
+                    args.condition,
+                    args.split,
+                    args.repetition,
+                    args.root / "blind_packets",
+                )
+            )
+        elif args.command == "import-codex":
+            print(import_codex_packet(args.packet, args.root))
+        elif args.command == "human-review":
+            print(
+                create_human_review_csv(
+                    args.root,
+                    args.split,
+                    args.root
+                    / "transcripts"
+                    / "human"
+                    / f"H1-{args.split}.csv",
+                )
+            )
+        elif args.command == "run-deepseek":
+            key = os.environ.get("DEEPSEEK_API_KEY")
+            if not key:
+                raise ValueError("DEEPSEEK_API_KEY is required")
+            config = _load_config()
+            provider = DeepSeekProvider.from_api_key(
+                key, model=config["deepseek_model"]
+            )
+            print(
+                run_deepseek_condition(
+                    args.root,
+                    args.condition,
+                    args.split,
+                    args.repetition,
+                    provider,
+                )
+            )
         elif args.command == "freeze":
             freeze_workflow(args.root, args.candidate)
         return 0
@@ -342,7 +422,7 @@ def _model_ids() -> dict[str, str]:
     config_path = Path(__file__).with_name("configs") / "physics_week9.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     return {
-        "openai": config["openai_model"],
+        "gpt_interactive": config["gpt_display_model"],
         "deepseek": config["deepseek_model"],
     }
 
