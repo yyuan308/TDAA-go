@@ -270,7 +270,7 @@ def import_codex_packet(packet: Path, benchmark_root: Path) -> Path:
             _append_raw_codex_output(
                 raw_log, student_id, run_manifest["model"], source
             )
-            _append_prediction_rows(
+            append_prediction_rows(
                 run_dir / "predictions.csv", parsed[student_id]
             )
 
@@ -293,7 +293,7 @@ def _append_raw_codex_output(
     )
 
 
-def _append_prediction_rows(path: Path, records: list[ScoreRecord]) -> None:
+def append_prediction_rows(path: Path, records: list[ScoreRecord]) -> None:
     with path.open("a", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=SCORE_FIELDS)
         for record in records:
