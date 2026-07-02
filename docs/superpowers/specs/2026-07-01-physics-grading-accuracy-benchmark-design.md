@@ -1,5 +1,11 @@
 # Physics Grading Accuracy Benchmark Design
 
+> **Execution revision:** The model-access strategy and experiment matrix in
+> this document are superseded by
+> [2026-07-02-physics-plus-deepseek-benchmark-revision-design.md](2026-07-02-physics-plus-deepseek-benchmark-revision-design.md).
+> The gold-standard, split, privacy, metric, and reporting decisions below
+> remain in force.
+
 ## Status
 
 - Date: 2026-07-01
