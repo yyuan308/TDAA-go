@@ -216,7 +216,8 @@ class CodexImportTests(unittest.TestCase):
                 output=benchmark_root / "transcripts" / "human" / "H1-dev.csv",
             )
 
-            with review_path.open(newline="", encoding="utf-8") as handle:
+            self.assertTrue(review_path.read_bytes().startswith(b"\xef\xbb\xbf"))
+            with review_path.open(newline="", encoding="utf-8-sig") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(len(rows), 4 * 12)
             self.assertEqual(

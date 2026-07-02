@@ -94,7 +94,7 @@ def create_human_review_csv(
     )
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", newline="", encoding="utf-8") as handle:
+    with output.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=HUMAN_REVIEW_FIELDS)
         writer.writeheader()
         for student_id in student_ids:
