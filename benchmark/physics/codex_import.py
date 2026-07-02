@@ -6,8 +6,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .gold import SCORE_FIELDS
 from .runner import create_run_directory
-from .schema import QUESTION_IDS, TranscriptAnswer
+from .schema import (
+    QUESTION_IDS,
+    ScoreRecord,
+    TranscriptAnswer,
+    validate_score_records,
+)
 
 
 HUMAN_REVIEW_FIELDS = (
@@ -133,10 +139,67 @@ def validate_human_review_csv(
         raise ValueError("human transcript review is incomplete")
 
 
+def parse_grading_output(path: Path, expected_student_id: str) -> list[ScoreRecord]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid grading JSON: {path.name}") from error
+    return score_records_from_payload(payload, expected_student_id)
+
+
+def score_records_from_payload(
+    payload: Any, expected_student_id: str
+) -> list[ScoreRecord]:
+    if not isinstance(payload, dict):
+        raise ValueError("grading output must be a JSON object")
+    if payload.get("student_id") != expected_student_id:
+        raise ValueError("student_id does not match packet manifest")
+    raw_scores = payload.get("scores")
+    if not isinstance(raw_scores, list):
+        raise ValueError("scores must be a list")
+
+    records = []
+    for row in raw_scores:
+        if not isinstance(row, dict):
+            raise ValueError("each score must be an object")
+        extracted = row.get("extracted_evidence")
+        evidence = row.get("evidence")
+        flags = row.get("flags")
+        score = row.get("score")
+        if not isinstance(extracted, str):
+            raise ValueError("extracted_evidence must be text")
+        if not isinstance(evidence, str):
+            raise ValueError("evidence must be text")
+        if not isinstance(flags, list) or not all(
+            isinstance(flag, str) for flag in flags
+        ):
+            raise ValueError("flags must be a list of strings")
+        if not isinstance(score, (int, float)) or isinstance(score, bool):
+            raise ValueError("score must be numeric")
+        records.append(
+            ScoreRecord(
+                student_id=expected_student_id,
+                question_id=row.get("question_id"),
+                score=float(score),
+                confidence=row.get("confidence"),
+                evidence=evidence,
+                flags=tuple(flags),
+            )
+        )
+    calculated_total = validate_score_records(records)
+    total = payload.get("total")
+    if not isinstance(total, (int, float)) or isinstance(total, bool):
+        raise ValueError("total must be numeric")
+    if abs(float(total) - calculated_total) > 1e-9:
+        raise ValueError("reported total does not match question scores")
+    return records
+
+
 def import_codex_packet(packet: Path, benchmark_root: Path) -> Path:
     manifest = _read_json(packet / "manifest.json")
-    if manifest.get("condition") != "T1":
-        raise ValueError("transcript importer requires a T1 packet")
+    condition = manifest.get("condition")
+    if condition not in {"T1", "G2", "G3"}:
+        raise ValueError(f"unsupported Codex condition: {condition}")
     expected = manifest.get("student_ids")
     if not isinstance(expected, list) or not expected:
         raise ValueError("packet manifest has no student IDs")
@@ -152,20 +215,25 @@ def import_codex_packet(packet: Path, benchmark_root: Path) -> Path:
     if len(output_by_id) != len(output_paths) or set(output_by_id) != set(expected):
         raise ValueError("Codex outputs do not match packet student IDs")
 
-    parsed = {
-        student_id: parse_transcript_output(output_by_id[student_id], student_id)
-        for student_id in expected
-    }
+    if condition == "T1":
+        parsed = {
+            student_id: parse_transcript_output(output_by_id[student_id], student_id)
+            for student_id in expected
+        }
+    else:
+        parsed = {
+            student_id: parse_grading_output(output_by_id[student_id], student_id)
+            for student_id in expected
+        }
 
     run_id = manifest.get("run_id")
-    if not isinstance(run_id, str) or run_id != "T1-{}-r{}".format(
-        manifest.get("split"), manifest.get("repetition")
-    ):
-        raise ValueError("packet run_id is inconsistent")
-    frozen_dir = (
-        benchmark_root / "transcripts" / "automatic" / run_id
+    expected_run_id = "{}-{}-r{}".format(
+        condition, manifest.get("split"), manifest.get("repetition")
     )
-    if frozen_dir.exists():
+    if not isinstance(run_id, str) or run_id != expected_run_id:
+        raise ValueError("packet run_id is inconsistent")
+    frozen_dir = benchmark_root / "transcripts" / "automatic" / run_id
+    if condition == "T1" and frozen_dir.exists():
         raise FileExistsError(f"transcript directory already exists: {frozen_dir}")
 
     run_manifest = dict(manifest)
@@ -174,37 +242,71 @@ def import_codex_packet(packet: Path, benchmark_root: Path) -> Path:
     run_dir = create_run_directory(
         benchmark_root / "runs", run_id, manifest=run_manifest
     )
-    frozen_dir.mkdir(parents=True, exist_ok=False)
-    transcript_log = run_dir / "transcripts.jsonl"
     raw_log = run_dir / "raw_responses.jsonl"
-    transcript_log.write_text("", encoding="utf-8")
 
-    for student_id in expected:
-        source = output_by_id[student_id]
-        shutil.copy2(source, frozen_dir / f"{student_id}.json")
-        _append_jsonl(
-            raw_log,
-            {
-                "student_id": student_id,
-                "status": "imported",
-                "model": run_manifest["model"],
-                "raw_text": source.read_text(encoding="utf-8"),
-                "timestamp": _utc_now(),
-            },
-        )
-        for answer in parsed[student_id]:
-            _append_jsonl(
-                transcript_log,
-                {
-                    "student_id": student_id,
-                    "question_id": answer.question_id,
-                    "text": answer.text,
-                    "unclear": answer.unclear,
-                },
+    if condition == "T1":
+        frozen_dir.mkdir(parents=True, exist_ok=False)
+        transcript_log = run_dir / "transcripts.jsonl"
+        transcript_log.write_text("", encoding="utf-8")
+        for student_id in expected:
+            source = output_by_id[student_id]
+            shutil.copy2(source, frozen_dir / f"{student_id}.json")
+            _append_raw_codex_output(
+                raw_log, student_id, run_manifest["model"], source
+            )
+            for answer in parsed[student_id]:
+                _append_jsonl(
+                    transcript_log,
+                    {
+                        "student_id": student_id,
+                        "question_id": answer.question_id,
+                        "text": answer.text,
+                        "unclear": answer.unclear,
+                    },
+                )
+    else:
+        for student_id in expected:
+            source = output_by_id[student_id]
+            _append_raw_codex_output(
+                raw_log, student_id, run_manifest["model"], source
+            )
+            _append_prediction_rows(
+                run_dir / "predictions.csv", parsed[student_id]
             )
 
     _finish_manifest(run_dir / "manifest.json")
     return run_dir
+
+
+def _append_raw_codex_output(
+    path: Path, student_id: str, model: str, source: Path
+) -> None:
+    _append_jsonl(
+        path,
+        {
+            "student_id": student_id,
+            "status": "imported",
+            "model": model,
+            "raw_text": source.read_text(encoding="utf-8"),
+            "timestamp": _utc_now(),
+        },
+    )
+
+
+def _append_prediction_rows(path: Path, records: list[ScoreRecord]) -> None:
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SCORE_FIELDS)
+        for record in records:
+            writer.writerow(
+                {
+                    "student_id": record.student_id,
+                    "question_id": record.question_id,
+                    "score": record.score,
+                    "confidence": record.confidence,
+                    "evidence": record.evidence,
+                    "ambiguity_code": ";".join(record.flags),
+                }
+            )
 
 
 def _finish_manifest(path: Path) -> None:

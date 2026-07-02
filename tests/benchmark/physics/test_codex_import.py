@@ -7,6 +7,7 @@ from pathlib import Path
 from benchmark.physics.codex_import import (
     create_human_review_csv,
     import_codex_packet,
+    parse_grading_output,
     parse_transcript_output,
     validate_human_review_csv,
 )
@@ -67,6 +68,48 @@ class CodexImportTests(unittest.TestCase):
             (source / f"{student_id}.json").write_text(
                 json.dumps(self._payload(student_id)), encoding="utf-8"
             )
+
+    def _grading_payload(self, student_id: str = "S008") -> dict:
+        return {
+            "student_id": student_id,
+            "scores": [
+                {
+                    "question_id": question_id,
+                    "extracted_evidence": "visible work",
+                    "score": 0.0,
+                    "evidence": "no credit in fixture",
+                    "confidence": "high",
+                    "flags": [],
+                }
+                for question_id in QUESTION_IDS
+            ],
+            "total": 0.0,
+        }
+
+    def _grading_packet(self, root: Path, payload: dict) -> Path:
+        packet = root / "grading-packet"
+        (packet / "outputs").mkdir(parents=True)
+        (packet / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "run_id": "G2-dev-r1",
+                    "condition": "G2",
+                    "split": "dev",
+                    "repetition": 1,
+                    "provider": "codex-plus-interactive",
+                    "display_model": "GPT-5.5",
+                    "student_ids": ["S008"],
+                    "prompt_hash": "prompt-hash",
+                    "rubric_hash": "rubric-hash",
+                    "input_hashes": {"S008": "input-hash"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (packet / "outputs" / "S008.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        return packet
 
     def test_imports_complete_t1_packet(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,6 +274,67 @@ class CodexImportTests(unittest.TestCase):
                 writer.writerows(rows)
             with self.assertRaisesRegex(ValueError, "review is incomplete"):
                 validate_human_review_csv(path, student_ids)
+
+    def test_imports_g2_grading_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            benchmark_root = root / "benchmark"
+            packet = self._grading_packet(root, self._grading_payload())
+
+            run_dir = import_codex_packet(packet, benchmark_root)
+
+            with (run_dir / "predictions.csv").open(
+                newline="", encoding="utf-8"
+            ) as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 12)
+            self.assertEqual({row["student_id"] for row in rows}, {"S008"})
+            self.assertEqual(
+                {row["question_id"] for row in rows}, set(QUESTION_IDS)
+            )
+            manifest = json.loads(
+                (run_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(manifest["provider"], "codex-plus-interactive")
+            self.assertEqual(manifest["model"], "GPT-5.5")
+            self.assertTrue((run_dir / "raw_responses.jsonl").stat().st_size)
+
+    def test_grading_output_rejects_invalid_scores_and_total(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "S008.json"
+
+            payload = self._grading_payload()
+            payload["scores"][0]["score"] = 0.1
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "quarter-point"):
+                parse_grading_output(path, "S008")
+
+            payload = self._grading_payload()
+            payload["scores"][0]["score"] = 3.0
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "out of range"):
+                parse_grading_output(path, "S008")
+
+            payload = self._grading_payload()
+            payload["scores"][-1]["question_id"] = "Q1a"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "exactly once"):
+                parse_grading_output(path, "S008")
+
+            payload = self._grading_payload()
+            payload["total"] = 1.0
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "total does not match"):
+                parse_grading_output(path, "S008")
+
+    def test_grading_output_rejects_wrong_student(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "S008.json"
+            path.write_text(
+                json.dumps(self._grading_payload("S009")), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "student_id does not match"):
+                parse_grading_output(path, "S008")
 
 
 if __name__ == "__main__":

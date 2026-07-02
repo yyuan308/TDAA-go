@@ -9,15 +9,15 @@ from pathlib import Path
 from collections.abc import Sequence
 from typing import Any
 
+from .codex_import import score_records_from_payload
 from .gold import create_score_template
 from .privacy import assert_anonymous_name, assert_privacy_approved
-from .providers import OpenAIProvider
 from .runner import (
     ValidationFailure,
     create_run_directory,
     run_student_with_retries,
 )
-from .schema import ProviderResult, ScoreRecord, validate_score_records
+from .schema import ProviderResult, ScoreRecord
 
 
 PRIVATE_DIRECTORIES = (
@@ -269,31 +269,7 @@ def _grading_prompt(template: str, student_id: str, rubric: dict[str, Any]) -> s
 def _parse_grading_response(raw_text: str, student_id: str) -> list[ScoreRecord]:
     try:
         payload = json.loads(raw_text)
-        if payload["student_id"] != student_id:
-            raise ValueError("student_id does not match request")
-        records = []
-        for item in payload["scores"]:
-            if not isinstance(item["extracted_evidence"], str):
-                raise ValueError("extracted_evidence must be text")
-            flags = item["flags"]
-            if not isinstance(flags, list) or not all(
-                isinstance(flag, str) for flag in flags
-            ):
-                raise ValueError("flags must be a list of strings")
-            records.append(
-                ScoreRecord(
-                    student_id=student_id,
-                    question_id=item["question_id"],
-                    score=float(item["score"]),
-                    confidence=item["confidence"],
-                    evidence=item["evidence"],
-                    flags=tuple(flags),
-                )
-            )
-        calculated_total = validate_score_records(records)
-        if abs(float(payload["total"]) - calculated_total) > 1e-9:
-            raise ValueError("reported total does not match question scores")
-        return records
+        return score_records_from_payload(payload, student_id)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         raise ValidationFailure(f"invalid grading response: {error}") from error
 
