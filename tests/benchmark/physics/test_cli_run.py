@@ -38,6 +38,50 @@ class FakeImageProvider:
 
 
 class CliRunTests(unittest.TestCase):
+    def test_g1_raises_when_every_student_fails(self):
+        class FailingProvider:
+            def complete_images(self, prompt, images):
+                raise RuntimeError("provider unavailable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "manifest").mkdir(parents=True)
+            (root / "rubric").mkdir()
+            image_dir = root / "anonymized" / "S008"
+            image_dir.mkdir(parents=True)
+            (root / "manifest" / "privacy_review.csv").write_text(
+                "page,approved,reviewer,reviewed_at\n"
+                "S008-p01.jpg,true,teacher,2026-07-02\n",
+                encoding="utf-8",
+            )
+            (root / "manifest" / "split.json").write_text(
+                json.dumps(
+                    {
+                        "development_student_ids": ["S008"],
+                        "heldout_student_ids": ["S002"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "rubric" / "rubric_v1.json").write_text(
+                json.dumps({"rubric_version": "rubric_v1", "questions": []}),
+                encoding="utf-8",
+            )
+            (image_dir / "S008-p01.jpg").write_bytes(b"anonymous-jpeg")
+
+            with self.assertRaisesRegex(RuntimeError, "produced no predictions"):
+                run_condition(
+                    root,
+                    "G1",
+                    "dev",
+                    1,
+                    provider=FailingProvider(),
+                )
+
+            run_dir = root / "runs" / "G1-dev-r1"
+            self.assertTrue(run_dir.exists())
+            self.assertTrue((run_dir / "failures.jsonl").read_text(encoding="utf-8"))
+
     def test_g1_blocks_an_image_missing_from_privacy_review(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

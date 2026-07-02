@@ -148,6 +148,8 @@ def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
 
 
 def _is_retryable_error(error: Exception) -> bool:
+    if _error_code(error) == "insufficient_quota":
+        return False
     status_code = getattr(error, "status_code", None)
     if status_code == 429 or (isinstance(status_code, int) and status_code >= 500):
         return True
@@ -155,6 +157,18 @@ def _is_retryable_error(error: Exception) -> bool:
     if "ratelimit" in error_name or "server" in error_name:
         return True
     return isinstance(error, (TimeoutError, ConnectionError))
+
+
+def _error_code(error: Exception) -> str | None:
+    code = getattr(error, "code", None)
+    if isinstance(code, str):
+        return code
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        nested = body.get("error", body)
+        if isinstance(nested, dict) and isinstance(nested.get("code"), str):
+            return nested["code"]
+    return None
 
 
 def _utc_now() -> str:

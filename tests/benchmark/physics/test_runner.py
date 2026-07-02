@@ -12,6 +12,28 @@ from benchmark.physics.schema import ProviderResult
 
 
 class RunnerTests(unittest.TestCase):
+    def test_insufficient_quota_is_terminal_without_retry(self):
+        class QuotaError(Exception):
+            status_code = 429
+            code = "insufficient_quota"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = create_run_directory(Path(tmp), "G1-dev-r1")
+            calls = []
+
+            def operation(attempt):
+                calls.append(attempt)
+                raise QuotaError("quota exhausted")
+
+            result = run_student_with_retries(run_dir, "S001", operation)
+
+            self.assertIsNone(result)
+            self.assertEqual(calls, [1])
+            failure = json.loads(
+                (run_dir / "failures.jsonl").read_text(encoding="utf-8").strip()
+            )
+            self.assertEqual(failure["attempts"], 1)
+
     def test_run_directory_is_immutable_and_initializes_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

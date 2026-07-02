@@ -181,6 +181,7 @@ def run_condition(
     }
     run_dir = create_run_directory(root / "runs", run_id, manifest=manifest)
     usage: dict[str, int | float] = {}
+    successful_students = 0
     for student_id in student_ids:
         images = [path.read_bytes() for path in image_paths[student_id]]
         base_prompt = _grading_prompt(prompt_template, student_id, rubric)
@@ -210,8 +211,13 @@ def run_condition(
         records = _parse_grading_response(result.raw_text, student_id)
         _append_predictions(run_dir / "predictions.csv", records)
         _merge_usage(usage, result.usage)
+        successful_students += 1
 
     _finish_manifest(run_dir / "manifest.json", usage)
+    if successful_students == 0:
+        raise RuntimeError(
+            f"{run_id} produced no predictions; see {run_dir / 'failures.jsonl'}"
+        )
     return run_dir
 
 
