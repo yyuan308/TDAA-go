@@ -21,6 +21,9 @@ FORBIDDEN_PACKET_TERMS = (
     "reports",
     "student_map",
 )
+FORBIDDEN_TEXT_TERMS = tuple(
+    term for term in FORBIDDEN_PACKET_TERMS if term != "reports"
+)
 
 TRANSCRIPT_SCHEMA = {
     "type": "object",
@@ -148,7 +151,7 @@ def audit_blind_packet(packet: Path) -> list[str]:
                 findings.append(f"forbidden path term {term}: {relative}")
         if path.is_file() and path.suffix.lower() in text_suffixes:
             text = path.read_text(encoding="utf-8").lower()
-            for term in FORBIDDEN_PACKET_TERMS:
+            for term in FORBIDDEN_TEXT_TERMS:
                 if term.lower() in text:
                     findings.append(f"forbidden text term {term}: {relative}")
     return sorted(set(findings))

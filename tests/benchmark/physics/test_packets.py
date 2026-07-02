@@ -103,6 +103,28 @@ class PacketTests(unittest.TestCase):
 
             self.assertTrue(any("primary_scores" in finding for finding in findings))
 
+    def test_audit_allows_reports_as_a_rubric_verb(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = Path(tmp) / "packet"
+            packet.mkdir()
+            (packet / "rubric.json").write_text(
+                json.dumps({"common_errors": ["Reports omega without B_m."]}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(audit_blind_packet(packet), [])
+
+    def test_audit_still_rejects_reports_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = Path(tmp) / "packet"
+            reports = packet / "reports"
+            reports.mkdir(parents=True)
+            (reports / "summary.json").write_text("{}", encoding="utf-8")
+
+            findings = audit_blind_packet(packet)
+
+            self.assertTrue(any("forbidden path term reports" in row for row in findings))
+
     def test_test_split_is_sealed_before_freeze(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
