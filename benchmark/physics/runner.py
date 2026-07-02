@@ -9,7 +9,14 @@ from .schema import ProviderResult
 
 
 class ValidationFailure(ValueError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        result: ProviderResult | None = None,
+    ):
+        super().__init__(message)
+        self.result = result
 
 
 def create_run_directory(
@@ -55,7 +62,14 @@ def run_student_with_retries(
         except ValidationFailure as error:
             if not validation_repaired:
                 validation_repaired = True
-                _append_attempt(run_dir, student_id, attempt, "repair", error=error)
+                _append_attempt(
+                    run_dir,
+                    student_id,
+                    attempt,
+                    "repair",
+                    result=error.result,
+                    error=error,
+                )
                 attempt += 1
                 continue
             _record_missing(run_dir, student_id, attempt, error)
@@ -78,7 +92,15 @@ def _record_missing(
     attempt: int,
     error: Exception,
 ) -> None:
-    _append_attempt(run_dir, student_id, attempt, "failed", error=error)
+    result = error.result if isinstance(error, ValidationFailure) else None
+    _append_attempt(
+        run_dir,
+        student_id,
+        attempt,
+        "failed",
+        result=result,
+        error=error,
+    )
     _append_jsonl(
         run_dir / "failures.jsonl",
         {

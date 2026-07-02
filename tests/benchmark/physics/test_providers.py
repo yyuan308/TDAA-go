@@ -55,6 +55,14 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(result.raw_text, '{"student_id":"S001","scores":[]}')
         self.assertEqual(result.model, "gpt-5.4")
         self.assertEqual(result.system_fingerprint, "fp-test")
+        output_format = responses.kwargs["text"]["format"]
+        self.assertEqual(output_format["type"], "json_schema")
+        self.assertTrue(output_format["strict"])
+        self.assertEqual(output_format["schema"]["required"], [
+            "student_id",
+            "scores",
+            "total",
+        ])
 
     def test_openai_text_request_uses_input_text_only(self):
         responses = FakeResponses()

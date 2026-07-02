@@ -7,9 +7,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Sequence
+from typing import Any
 
 from .gold import create_score_template
-from .privacy import assert_privacy_approved
+from .privacy import assert_anonymous_name, assert_privacy_approved
+from .providers import OpenAIProvider
+from .runner import (
+    ValidationFailure,
+    create_run_directory,
+    run_student_with_retries,
+)
+from .schema import ProviderResult, ScoreRecord, validate_score_records
 
 
 PRIVATE_DIRECTORIES = (
@@ -103,16 +111,108 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def validate_workspace(root: Path) -> None:
-    assert_privacy_approved(_read_privacy_rows(root))
+    privacy_rows = _read_privacy_rows(root)
+    assert_privacy_approved(privacy_rows)
 
 
-def run_condition(root: Path, condition: str, split: str, repetition: int) -> None:
+def run_condition(
+    root: Path,
+    condition: str,
+    split: str,
+    repetition: int,
+    *,
+    provider: Any | None = None,
+) -> Path:
     if repetition <= 0:
         raise ValueError("repetition must be positive")
-    assert_privacy_approved(_read_privacy_rows(root))
+    privacy_rows = _read_privacy_rows(root)
+    assert_privacy_approved(privacy_rows)
     if split == "test" and not (root / "freeze.json").exists():
         raise ValueError("held-out split is sealed until freeze.json exists")
-    _require_api_key(condition)
+    if condition != "G1":
+        _require_api_key(condition)
+        raise NotImplementedError(f"{condition} execution is not implemented yet")
+
+    config = _load_config()
+    if provider is None:
+        _require_api_key(condition)
+        from openai import OpenAI
+
+        provider = OpenAIProvider(
+            OpenAI(api_key=os.environ["OPENAI_API_KEY"]),
+            model=config["openai_model"],
+        )
+
+    student_ids = _load_split_student_ids(root, split)
+    rubric_path = root / "rubric" / "rubric_v1.json"
+    rubric = json.loads(rubric_path.read_text(encoding="utf-8"))
+    prompt_path = Path(__file__).with_name("prompts") / "grade_structured.txt"
+    prompt_template = prompt_path.read_text(encoding="utf-8")
+    image_paths = {
+        student_id: sorted((root / "anonymized" / student_id).glob("*.jpg"))
+        for student_id in student_ids
+    }
+    missing = [student_id for student_id, paths in image_paths.items() if not paths]
+    if missing:
+        raise FileNotFoundError(f"anonymous images missing for: {', '.join(missing)}")
+    approved_pages = {row["page"] for row in privacy_rows}
+    upload_paths = [path for paths in image_paths.values() for path in paths]
+    for path in upload_paths:
+        assert_anonymous_name(path)
+    unapproved = sorted(path.name for path in upload_paths if path.name not in approved_pages)
+    if unapproved:
+        raise ValueError(f"privacy approval missing for: {', '.join(unapproved)}")
+
+    run_id = f"{condition}-{split}-r{repetition}"
+    manifest = {
+        "condition": condition,
+        "split": split,
+        "repetition": repetition,
+        "provider": "openai",
+        "model": config["openai_model"],
+        "student_ids": student_ids,
+        "prompt_hash": _file_hash(prompt_path),
+        "rubric_hash": _file_hash(rubric_path),
+        "input_hashes": {
+            student_id: _hash_files(paths)
+            for student_id, paths in image_paths.items()
+        },
+        "parameters": {"structured_output": True},
+    }
+    run_dir = create_run_directory(root / "runs", run_id, manifest=manifest)
+    usage: dict[str, int | float] = {}
+    for student_id in student_ids:
+        images = [path.read_bytes() for path in image_paths[student_id]]
+        base_prompt = _grading_prompt(prompt_template, student_id, rubric)
+
+        def operation(attempt: int) -> ProviderResult:
+            prompt = base_prompt
+            if attempt > 1:
+                prompt += (
+                    "\nThe previous response failed validation. Return one corrected "
+                    "JSON object only, following the required schema exactly."
+                )
+            result = provider.complete_images(prompt, images)
+            try:
+                _parse_grading_response(result.raw_text, student_id)
+            except ValidationFailure as error:
+                raise ValidationFailure(str(error), result=result) from error
+            return result
+
+        result = run_student_with_retries(
+            run_dir,
+            student_id,
+            operation,
+            max_retries=config["max_retries"],
+        )
+        if result is None:
+            continue
+        records = _parse_grading_response(result.raw_text, student_id)
+        _append_predictions(run_dir / "predictions.csv", records)
+        _merge_usage(usage, result.usage)
+
+    _finish_manifest(run_dir / "manifest.json", usage)
+    return run_dir
 
 
 def freeze_workflow(root: Path, candidate: str) -> None:
@@ -134,8 +234,117 @@ def _read_privacy_rows(root: Path) -> list[dict[str, str]]:
     path = root / "manifest" / "privacy_review.csv"
     if not path.exists():
         raise ValueError(f"privacy approval missing for: {path}")
-    with path.open(newline="", encoding="utf-8") as handle:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         return list(csv.DictReader(handle))
+
+
+def _load_config() -> dict[str, Any]:
+    path = Path(__file__).with_name("configs") / "physics_week9.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_split_student_ids(root: Path, split: str) -> list[str]:
+    split_data = json.loads(
+        (root / "manifest" / "split.json").read_text(encoding="utf-8")
+    )
+    field = "development_student_ids" if split == "dev" else "heldout_student_ids"
+    return list(split_data[field])
+
+
+def _grading_prompt(template: str, student_id: str, rubric: dict[str, Any]) -> str:
+    context = {
+        "student_id": student_id,
+        "rubric": rubric,
+    }
+    return (
+        template
+        + f"\n\nOutput student_id must be {student_id}. "
+        "The ID in the JSON shape above is only an example."
+        "\nBenchmark context:\n"
+        + json.dumps(context, ensure_ascii=True, sort_keys=True)
+    )
+
+
+def _parse_grading_response(raw_text: str, student_id: str) -> list[ScoreRecord]:
+    try:
+        payload = json.loads(raw_text)
+        if payload["student_id"] != student_id:
+            raise ValueError("student_id does not match request")
+        records = []
+        for item in payload["scores"]:
+            if not isinstance(item["extracted_evidence"], str):
+                raise ValueError("extracted_evidence must be text")
+            flags = item["flags"]
+            if not isinstance(flags, list) or not all(
+                isinstance(flag, str) for flag in flags
+            ):
+                raise ValueError("flags must be a list of strings")
+            records.append(
+                ScoreRecord(
+                    student_id=student_id,
+                    question_id=item["question_id"],
+                    score=float(item["score"]),
+                    confidence=item["confidence"],
+                    evidence=item["evidence"],
+                    flags=tuple(flags),
+                )
+            )
+        calculated_total = validate_score_records(records)
+        if abs(float(payload["total"]) - calculated_total) > 1e-9:
+            raise ValueError("reported total does not match question scores")
+        return records
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ValidationFailure(f"invalid grading response: {error}") from error
+
+
+def _append_predictions(path: Path, records: list[ScoreRecord]) -> None:
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=(
+                "student_id",
+                "question_id",
+                "score",
+                "confidence",
+                "evidence",
+                "ambiguity_code",
+            ),
+        )
+        for record in records:
+            writer.writerow(
+                {
+                    "student_id": record.student_id,
+                    "question_id": record.question_id,
+                    "score": record.score,
+                    "confidence": record.confidence,
+                    "evidence": record.evidence,
+                    "ambiguity_code": ";".join(record.flags),
+                }
+            )
+
+
+def _hash_files(paths: list[Path]) -> str:
+    digest = hashlib.sha256()
+    for path in paths:
+        digest.update(path.name.encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _merge_usage(total: dict[str, int | float], usage: dict[str, Any]) -> None:
+    for key, value in usage.items():
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            total[key] = total.get(key, 0) + value
+
+
+def _finish_manifest(path: Path, usage: dict[str, int | float]) -> None:
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["end_time"] = _utc_now()
+    manifest["usage"] = usage
+    path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _require_api_key(condition: str) -> None:

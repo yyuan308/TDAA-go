@@ -113,6 +113,35 @@ class RunnerTests(unittest.TestCase):
             ]
             self.assertEqual([row["status"] for row in attempts], ["repair", "ok"])
 
+    def test_validation_failure_retains_invalid_raw_response(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = create_run_directory(Path(tmp), "G1-dev-r1")
+
+            def operation(attempt):
+                if attempt == 1:
+                    invalid = ProviderResult(
+                        raw_text="{not-json",
+                        model="gpt-5.4",
+                        usage={"output_tokens": 2},
+                    )
+                    raise ValidationFailure("invalid JSON", result=invalid)
+                return ProviderResult(
+                    raw_text='{"student_id":"S001","scores":[]}',
+                    model="gpt-5.4",
+                )
+
+            run_student_with_retries(run_dir, "S001", operation)
+
+            attempts = [
+                json.loads(line)
+                for line in (run_dir / "raw_responses.jsonl").read_text(
+                    encoding="utf-8"
+                ).splitlines()
+            ]
+            self.assertEqual(attempts[0]["status"], "repair")
+            self.assertEqual(attempts[0]["raw_text"], "{not-json")
+            self.assertEqual(attempts[0]["usage"], {"output_tokens": 2})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,69 @@ from typing import Any
 from .schema import ProviderResult
 
 
+GRADING_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "name": "physics_grading_result",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "student_id": {"type": "string", "pattern": "^S[0-9]{3}$"},
+            "scores": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question_id": {
+                            "type": "string",
+                            "enum": [
+                                "Q1a",
+                                "Q1b",
+                                "Q1c",
+                                "Q1d",
+                                "Q2a",
+                                "Q2b",
+                                "Q3a",
+                                "Q3b",
+                                "Q3c",
+                                "Q3d",
+                                "Q3e",
+                                "Q3f",
+                            ],
+                        },
+                        "extracted_evidence": {"type": "string"},
+                        "score": {"type": "number", "minimum": 0, "maximum": 7},
+                        "evidence": {"type": "string"},
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
+                        "flags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": [
+                        "question_id",
+                        "extracted_evidence",
+                        "score",
+                        "evidence",
+                        "confidence",
+                        "flags",
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+            "total": {"type": "number", "minimum": 0, "maximum": 30},
+        },
+        "required": ["student_id", "scores", "total"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _usage_to_dict(usage: Any) -> dict[str, Any]:
     if usage is None:
         return {}
@@ -34,6 +97,7 @@ class OpenAIProvider:
         response = self.client.responses.create(
             model=self.model,
             input=[{"role": "user", "content": content}],
+            text={"format": GRADING_RESPONSE_FORMAT},
         )
         return _openai_result(response)
 
