@@ -135,13 +135,8 @@ def run_condition(
 
     config = _load_config()
     if provider is None:
-        _require_api_key(condition)
-        from openai import OpenAI
-
-        provider = OpenAIProvider(
-            OpenAI(api_key=os.environ["OPENAI_API_KEY"]),
-            model=config["openai_model"],
-        )
+        raise ValueError("OpenAI API conditions are inactive in the revised benchmark")
+    model = getattr(provider, "model", config["gpt_display_model"])
 
     student_ids = _load_split_student_ids(root, split)
     rubric_path = root / "rubric" / "rubric_v1.json"
@@ -169,7 +164,7 @@ def run_condition(
         "split": split,
         "repetition": repetition,
         "provider": "openai",
-        "model": config["openai_model"],
+        "model": model,
         "student_ids": student_ids,
         "prompt_hash": _file_hash(prompt_path),
         "rubric_hash": _file_hash(rubric_path),

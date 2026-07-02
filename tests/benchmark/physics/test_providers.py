@@ -109,15 +109,18 @@ class ProviderTests(unittest.TestCase):
         self.assertIsInstance(provider, DeepSeekProvider)
         self.assertEqual(calls, [{"api_key": "secret", "base_url": "https://api.deepseek.com"}])
 
-    def test_frozen_config_pins_models_and_repetitions(self):
+    def test_revised_config_uses_interactive_gpt_and_one_run(self):
         path = Path("benchmark/physics/configs/physics_week9.json")
         config = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(config["dataset"], "physics_week9")
-        self.assertEqual(config["openai_model"], "gpt-5.4")
+        self.assertEqual(config["gpt_execution"], "codex-plus-interactive")
+        self.assertEqual(config["gpt_display_model"], "GPT-5.5")
         self.assertEqual(config["deepseek_model"], "deepseek-v4-pro")
-        self.assertEqual(config["runs_per_condition"], 3)
+        self.assertEqual(config["runs_per_condition"], 1)
         self.assertEqual(config["bootstrap_samples"], 10000)
+        self.assertEqual(config["excluded_run_ids"], ["G1-dev-r1"])
+        self.assertNotIn("openai_model", config)
 
     def test_prompts_require_structured_outputs_without_guessing(self):
         prompt_dir = Path("benchmark/physics/prompts")
