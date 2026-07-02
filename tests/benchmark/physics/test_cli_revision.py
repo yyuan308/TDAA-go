@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from benchmark.physics.cli import main
+from benchmark.physics.gold import SCORE_FIELDS
 from benchmark.physics.schema import QUESTION_IDS
 
 
@@ -42,6 +43,70 @@ class RevisedCliTests(unittest.TestCase):
             json.dumps({"rubric_version": "rubric_v1", "questions": []}),
             encoding="utf-8",
         )
+        return benchmark_root
+
+    def _evaluation_workspace(self, root: Path) -> Path:
+        benchmark_root = root / "benchmark"
+        (benchmark_root / "manifest").mkdir(parents=True)
+        (benchmark_root / "gold").mkdir()
+        (benchmark_root / "rubric").mkdir()
+        (benchmark_root / "runs").mkdir()
+        (benchmark_root / "manifest" / "split.json").write_text(
+            json.dumps(
+                {
+                    "development_student_ids": ["S008"],
+                    "heldout_student_ids": ["S009"],
+                    "transcript_gold": {
+                        "development_student_ids": ["S008"],
+                        "heldout_student_ids": ["S009"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        for filename, score in (("primary_scores.csv", "1"), ("reviewer_scores.csv", "")):
+            with (benchmark_root / "gold" / filename).open(
+                "w", newline="", encoding="utf-8"
+            ) as handle:
+                writer = csv.DictWriter(handle, fieldnames=SCORE_FIELDS)
+                writer.writeheader()
+                for question_id in QUESTION_IDS:
+                    writer.writerow(
+                        {
+                            "student_id": "S008",
+                            "question_id": question_id,
+                            "score": score,
+                            "confidence": "high" if score else "",
+                            "evidence": "",
+                            "ambiguity_code": "",
+                        }
+                    )
+        (benchmark_root / "rubric" / "rubric_v1.json").write_text(
+            json.dumps({"rubric_version": "rubric_v1"}), encoding="utf-8"
+        )
+        for run_id in ("G0-all-r1", "G2-dev-r1", "D1-dev-r1"):
+            run_dir = benchmark_root / "runs" / run_id
+            run_dir.mkdir()
+            (run_dir / "manifest.json").write_text(
+                json.dumps({"run_id": run_id, "end_time": "2026-07-02T00:00:00Z"}),
+                encoding="utf-8",
+            )
+            with (run_dir / "predictions.csv").open(
+                "w", newline="", encoding="utf-8"
+            ) as handle:
+                writer = csv.DictWriter(handle, fieldnames=SCORE_FIELDS)
+                writer.writeheader()
+                for question_id in QUESTION_IDS:
+                    writer.writerow(
+                        {
+                            "student_id": "S008",
+                            "question_id": question_id,
+                            "score": "1",
+                            "confidence": "high",
+                            "evidence": "",
+                            "ambiguity_code": "",
+                        }
+                    )
         return benchmark_root
 
     def test_build_packet_command(self):
@@ -154,6 +219,30 @@ class RevisedCliTests(unittest.TestCase):
 
             self.assertNotEqual(code, 0)
             self.assertIn("DEEPSEEK_API_KEY is required", stderr.getvalue())
+
+    def test_evaluate_command_writes_split_metrics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._evaluation_workspace(Path(tmp))
+
+            code = main(["evaluate", "--root", str(root), "--split", "dev"])
+
+            self.assertEqual(code, 0)
+            self.assertTrue((root / "metrics-dev.json").exists())
+
+    def test_freeze_command_uses_revised_workflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._evaluation_workspace(Path(tmp))
+
+            code = main(
+                ["freeze", "--root", str(root), "--candidate", "staged_v1"]
+            )
+
+            self.assertEqual(code, 0)
+            freeze = json.loads((root / "freeze.json").read_text(encoding="utf-8"))
+            self.assertEqual(freeze["gpt_display_model"], "GPT-5.5")
+            self.assertEqual(
+                freeze["input_policy"], "frozen anonymous transcript workflow"
+            )
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from .codex_import import (
     score_records_from_payload,
 )
 from .deepseek_runs import run_deepseek_condition
+from .evaluation import evaluate_conditions, freeze_revised_workflow
 from .gold import create_score_template
 from .packets import build_blind_packet
 from .privacy import assert_anonymous_name, assert_privacy_approved
@@ -120,6 +121,12 @@ def _build_parser() -> argparse.ArgumentParser:
     deepseek_parser.add_argument("--split", choices=("dev", "test"), required=True)
     deepseek_parser.add_argument("--repetition", type=int, required=True)
 
+    evaluate_parser = subparsers.add_parser(
+        "evaluate", help="evaluate completed benchmark runs"
+    )
+    evaluate_parser.add_argument("--root", type=Path, required=True)
+    evaluate_parser.add_argument("--split", choices=("dev", "test"), required=True)
+
     freeze_parser = subparsers.add_parser("freeze", help="seal the held-out workflow")
     freeze_parser.add_argument("--root", type=Path, required=True)
     freeze_parser.add_argument("--candidate", required=True)
@@ -180,8 +187,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     provider,
                 )
             )
+        elif args.command == "evaluate":
+            print(json.dumps(evaluate_conditions(args.root, args.split), sort_keys=True))
         elif args.command == "freeze":
-            freeze_workflow(args.root, args.candidate)
+            print(freeze_revised_workflow(args.root, args.candidate))
         return 0
     except SystemExit as error:
         return int(error.code)
