@@ -1,3 +1,4 @@
+import csv
 import json
 import re
 import shutil
@@ -7,6 +8,15 @@ from typing import Any
 
 from .runner import create_run_directory
 from .schema import QUESTION_IDS, TranscriptAnswer
+
+
+HUMAN_REVIEW_FIELDS = (
+    "student_id",
+    "question_id",
+    "automatic_text",
+    "human_text",
+    "reviewed",
+)
 
 
 def parse_transcript_output(
@@ -61,6 +71,66 @@ def validate_transcript_answers(answers: list[TranscriptAnswer]) -> None:
         set(question_ids)
     ):
         raise ValueError("each question must appear exactly once")
+
+
+def create_human_review_csv(
+    benchmark_root: Path, split: str, output: Path
+) -> Path:
+    if split not in {"dev", "test"}:
+        raise ValueError(f"unsupported split: {split}")
+    if output.exists():
+        raise FileExistsError(f"human review file already exists: {output}")
+    split_data = _read_json(benchmark_root / "manifest" / "split.json")
+    key = "development_student_ids" if split == "dev" else "heldout_student_ids"
+    student_ids = split_data["transcript_gold"][key]
+    source_dir = (
+        benchmark_root / "transcripts" / "automatic" / f"T1-{split}-r1"
+    )
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=HUMAN_REVIEW_FIELDS)
+        writer.writeheader()
+        for student_id in student_ids:
+            answers = parse_transcript_output(
+                source_dir / f"{student_id}.json", student_id
+            )
+            for answer in answers:
+                writer.writerow(
+                    {
+                        "student_id": student_id,
+                        "question_id": answer.question_id,
+                        "automatic_text": answer.text,
+                        "human_text": "",
+                        "reviewed": "",
+                    }
+                )
+    return output
+
+
+def validate_human_review_csv(
+    path: Path, expected_student_ids: list[str]
+) -> None:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if tuple(reader.fieldnames or ()) != HUMAN_REVIEW_FIELDS:
+            raise ValueError("human transcript columns do not match schema")
+        rows = list(reader)
+
+    expected_pairs = {
+        (student_id, question_id)
+        for student_id in expected_student_ids
+        for question_id in QUESTION_IDS
+    }
+    actual_pairs = {(row["student_id"], row["question_id"]) for row in rows}
+    if actual_pairs != expected_pairs or len(rows) != len(expected_pairs):
+        raise ValueError("human transcript rows do not match frozen subset")
+    if any(not row["automatic_text"].strip() for row in rows):
+        raise ValueError("automatic transcript text is incomplete")
+    if any(not row["human_text"].strip() for row in rows):
+        raise ValueError("human transcript text is incomplete")
+    if any(row["reviewed"].strip().lower() != "true" for row in rows):
+        raise ValueError("human transcript review is incomplete")
 
 
 def import_codex_packet(packet: Path, benchmark_root: Path) -> Path:

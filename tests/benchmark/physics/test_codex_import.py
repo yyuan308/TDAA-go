@@ -1,11 +1,14 @@
+import csv
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from benchmark.physics.codex_import import (
+    create_human_review_csv,
     import_codex_packet,
     parse_transcript_output,
+    validate_human_review_csv,
 )
 from benchmark.physics.schema import QUESTION_IDS
 
@@ -49,6 +52,21 @@ class CodexImportTests(unittest.TestCase):
                 json.dumps(payload), encoding="utf-8"
             )
         return packet
+
+    def _automatic_transcripts(
+        self, benchmark_root: Path, student_ids: list[str], split: str = "dev"
+    ) -> None:
+        source = (
+            benchmark_root
+            / "transcripts"
+            / "automatic"
+            / f"T1-{split}-r1"
+        )
+        source.mkdir(parents=True)
+        for student_id in student_ids:
+            (source / f"{student_id}.json").write_text(
+                json.dumps(self._payload(student_id)), encoding="utf-8"
+            )
 
     def test_imports_complete_t1_packet(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,6 +148,89 @@ class CodexImportTests(unittest.TestCase):
                 import_codex_packet(packet, benchmark_root)
 
             self.assertFalse((benchmark_root / "runs" / "T1-dev-r1").exists())
+
+    def test_creates_human_review_for_frozen_subset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark_root = Path(tmp) / "benchmark"
+            (benchmark_root / "manifest").mkdir(parents=True)
+            student_ids = ["S008", "S010", "S018", "S022"]
+            (benchmark_root / "manifest" / "split.json").write_text(
+                json.dumps(
+                    {
+                        "transcript_gold": {
+                            "development_student_ids": student_ids,
+                            "heldout_student_ids": [],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._automatic_transcripts(benchmark_root, student_ids)
+
+            review_path = create_human_review_csv(
+                benchmark_root=benchmark_root,
+                split="dev",
+                output=benchmark_root / "transcripts" / "human" / "H1-dev.csv",
+            )
+
+            with review_path.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 4 * 12)
+            self.assertEqual(
+                tuple(rows[0]),
+                (
+                    "student_id",
+                    "question_id",
+                    "automatic_text",
+                    "human_text",
+                    "reviewed",
+                ),
+            )
+            self.assertEqual(rows[0]["human_text"], "")
+            self.assertEqual(rows[0]["reviewed"], "")
+
+    def test_human_review_requires_text_and_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            benchmark_root = Path(tmp) / "benchmark"
+            (benchmark_root / "manifest").mkdir(parents=True)
+            student_ids = ["S008"]
+            (benchmark_root / "manifest" / "split.json").write_text(
+                json.dumps(
+                    {
+                        "transcript_gold": {
+                            "development_student_ids": student_ids,
+                            "heldout_student_ids": [],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._automatic_transcripts(benchmark_root, student_ids)
+            path = create_human_review_csv(
+                benchmark_root, "dev", benchmark_root / "H1-dev.csv"
+            )
+            with path.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+
+            with self.assertRaisesRegex(ValueError, "text is incomplete"):
+                validate_human_review_csv(path, student_ids)
+
+            for row in rows:
+                row["human_text"] = row["automatic_text"]
+                row["reviewed"] = "true"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+                writer.writeheader()
+                writer.writerows(rows)
+            validate_human_review_csv(path, student_ids)
+
+            rows[0]["reviewed"] = "false"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+                writer.writeheader()
+                writer.writerows(rows)
+            with self.assertRaisesRegex(ValueError, "review is incomplete"):
+                validate_human_review_csv(path, student_ids)
 
 
 if __name__ == "__main__":
