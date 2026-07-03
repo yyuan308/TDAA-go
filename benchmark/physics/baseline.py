@@ -30,13 +30,11 @@ def import_baseline_run(physics_root: Path) -> Path:
     benchmark_root = physics_root / "benchmark"
     map_path = benchmark_root / "manifest" / "student_map.csv"
     grades_path = physics_root / "grades" / "grades.csv"
-    with map_path.open(newline="", encoding="utf-8-sig") as handle:
-        map_rows = list(csv.DictReader(handle))
+    map_rows = _read_csv_rows(map_path)
     source_to_id = {row["student"]: row["student_id"] for row in map_rows}
     if len(source_to_id) != len(map_rows):
         raise ValueError("student map contains duplicate source labels")
-    with grades_path.open(newline="", encoding="utf-8-sig") as handle:
-        grade_rows = list(csv.DictReader(handle))
+    grade_rows = _read_csv_rows(grades_path)
     grade_by_source = {row["student"]: row for row in grade_rows}
     if len(grade_by_source) != len(grade_rows):
         raise ValueError("historical grades contain duplicate students")
@@ -90,3 +88,17 @@ def import_baseline_run(physics_root: Path) -> Path:
         encoding="utf-8",
     )
     return run_dir
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    try:
+        return _read_csv_rows_with_encoding(path, "utf-8-sig")
+    except UnicodeDecodeError:
+        return _read_csv_rows_with_encoding(path, "gb18030")
+
+
+def _read_csv_rows_with_encoding(
+    path: Path, encoding: str
+) -> list[dict[str, str]]:
+    with path.open(newline="", encoding=encoding) as handle:
+        return list(csv.DictReader(handle))

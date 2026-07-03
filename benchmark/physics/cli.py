@@ -21,12 +21,14 @@ from .gold import create_score_template
 from .packets import build_blind_packet
 from .privacy import assert_anonymous_name, assert_privacy_approved
 from .providers import DeepSeekProvider
+from .report import write_benchmark_report
 from .runner import (
     ValidationFailure,
     create_run_directory,
     run_student_with_retries,
 )
 from .schema import ProviderResult, ScoreRecord
+from .validation import validate_benchmark_workspace
 
 
 PRIVATE_DIRECTORIES = (
@@ -125,11 +127,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "evaluate", help="evaluate completed benchmark runs"
     )
     evaluate_parser.add_argument("--root", type=Path, required=True)
-    evaluate_parser.add_argument("--split", choices=("dev", "test"), required=True)
+    evaluate_parser.add_argument(
+        "--split", choices=("dev", "test", "all"), required=True
+    )
 
     freeze_parser = subparsers.add_parser("freeze", help="seal the held-out workflow")
     freeze_parser.add_argument("--root", type=Path, required=True)
     freeze_parser.add_argument("--candidate", required=True)
+
+    report_parser = subparsers.add_parser(
+        "report", help="render the anonymous benchmark report"
+    )
+    report_parser.add_argument("--root", type=Path, required=True)
     return parser
 
 
@@ -191,6 +200,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(evaluate_conditions(args.root, args.split), sort_keys=True))
         elif args.command == "freeze":
             print(freeze_revised_workflow(args.root, args.candidate))
+        elif args.command == "report":
+            print(write_benchmark_report(args.root))
         return 0
     except SystemExit as error:
         return int(error.code)
@@ -202,6 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 def validate_workspace(root: Path) -> None:
     privacy_rows = _read_privacy_rows(root)
     assert_privacy_approved(privacy_rows)
+    print(json.dumps(validate_benchmark_workspace(root), sort_keys=True))
 
 
 def run_condition(

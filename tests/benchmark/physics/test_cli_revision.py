@@ -141,16 +141,19 @@ class RevisedCliTests(unittest.TestCase):
             manifest_dir.mkdir(parents=True)
             fields = ["student", *QUESTION_IDS]
             with (grades_dir / "grades.csv").open(
-                "w", newline="", encoding="utf-8"
+                "w", newline="", encoding="gb18030"
             ) as handle:
                 writer = csv.DictWriter(handle, fieldnames=fields)
                 writer.writeheader()
                 writer.writerow(
-                    {"student": "source-name", **{qid: "0" for qid in QUESTION_IDS}}
+                    {
+                        "student": "source-微型图片",
+                        **{qid: "0" for qid in QUESTION_IDS},
+                    }
                 )
             (manifest_dir / "student_map.csv").write_text(
                 "student_id,student,source_file\n"
-                "S008,source-name,submissions/source-name.pdf\n",
+                "S008,source-微型图片,submissions/source-微型图片.pdf\n",
                 encoding="utf-8",
             )
 
@@ -165,7 +168,7 @@ class RevisedCliTests(unittest.TestCase):
             self.assertEqual(len(predictions), 12)
             self.assertEqual({row["student_id"] for row in predictions}, {"S008"})
             self.assertNotIn(
-                "source-name",
+                "source-微型图片",
                 (run_dir / "predictions.csv").read_text(encoding="utf-8"),
             )
 
@@ -229,6 +232,16 @@ class RevisedCliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((root / "metrics-dev.json").exists())
 
+    def test_evaluate_command_accepts_all_split(self):
+        with patch(
+            "benchmark.physics.cli.evaluate_conditions",
+            return_value={"split": "all", "conditions": {}},
+        ) as evaluate:
+            code = main(["evaluate", "--root", "benchmark-root", "--split", "all"])
+
+        self.assertEqual(code, 0)
+        evaluate.assert_called_once_with(Path("benchmark-root"), "all")
+
     def test_freeze_command_uses_revised_workflow(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._evaluation_workspace(Path(tmp))
@@ -242,6 +255,40 @@ class RevisedCliTests(unittest.TestCase):
             self.assertEqual(freeze["gpt_display_model"], "GPT-5.5")
             self.assertEqual(
                 freeze["input_policy"], "frozen anonymous transcript workflow"
+            )
+
+    def test_report_command_writes_private_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "benchmark"
+            root.mkdir()
+            metrics = {
+                "split": "test",
+                "reference_status": "single_primary_rater",
+                "excluded_runs": [],
+                "paired_vs_g0": {},
+                "conditions": {
+                    "G0": {
+                        "run_id": "G0-all-r1",
+                        "n_students": 1,
+                        "population": "full_split",
+                        "exact_agreement": 1.0,
+                        "macro_accuracy": 1.0,
+                        "total_score_mae": 0.0,
+                        "within_1_point_rate": 1.0,
+                        "mean_signed_error": 0.0,
+                        "per_question_accuracy": {"Q1a": 1.0},
+                    }
+                },
+            }
+            (root / "metrics-test.json").write_text(
+                json.dumps(metrics), encoding="utf-8"
+            )
+
+            code = main(["report", "--root", str(root)])
+
+            self.assertEqual(code, 0)
+            self.assertTrue(
+                (root / "reports" / "physics_week9_benchmark.md").exists()
             )
 
 

@@ -87,6 +87,23 @@ class EvaluationTests(unittest.TestCase):
                         }
                     )
 
+    @staticmethod
+    def _append_scores(path: Path, student_ids: list[str], *, score: str) -> None:
+        with path.open("a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=SCORE_FIELDS)
+            for student_id in student_ids:
+                for question_id in QUESTION_IDS:
+                    writer.writerow(
+                        {
+                            "student_id": student_id,
+                            "question_id": question_id,
+                            "score": score,
+                            "confidence": "high",
+                            "evidence": "",
+                            "ambiguity_code": "",
+                        }
+                    )
+
     def test_excludes_failed_g1_and_keeps_subset_metrics_separate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._workspace(Path(tmp))
@@ -100,6 +117,16 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(result["conditions"]["G3"]["n_students"], 4)
             self.assertEqual(
                 result["conditions"]["G3"]["population"], "transcript_subset"
+            )
+            self.assertEqual(
+                result["transcript_subset_comparisons"]["GPT"]["n_students"],
+                4,
+            )
+            self.assertEqual(
+                result["transcript_subset_comparisons"]["GPT"][
+                    "human_minus_automatic"
+                ]["mean_difference"],
+                0.0,
             )
             self.assertEqual(result["reference_status"], "single_primary_rater")
             self.assertNotIn("human_agreement", result)
@@ -132,6 +159,39 @@ class EvaluationTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "primary gold is incomplete"):
                 evaluate_conditions(root, split="dev")
+
+    def test_all_split_combines_development_and_heldout_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._workspace(Path(tmp))
+            self._append_scores(
+                root / "gold" / "primary_scores.csv", ["S009"], score="1"
+            )
+            self._append_scores(
+                root / "runs" / "G0-all-r1" / "predictions.csv",
+                ["S009"],
+                score="1",
+            )
+            for condition in ("G2", "D1", "G3", "D2"):
+                run_id = f"{condition}-test-r1"
+                run_dir = root / "runs" / run_id
+                run_dir.mkdir()
+                (run_dir / "manifest.json").write_text(
+                    json.dumps(
+                        {"run_id": run_id, "end_time": "2026-07-03T00:00:00Z"}
+                    ),
+                    encoding="utf-8",
+                )
+                self._write_scores(
+                    run_dir / "predictions.csv", ["S009"], score="1"
+                )
+
+            result = evaluate_conditions(root, split="all")
+
+            self.assertEqual(result["conditions"]["G2"]["n_students"], 9)
+            self.assertEqual(result["conditions"]["G3"]["n_students"], 5)
+            self.assertIn("G2-dev-r1", result["conditions"]["G2"]["run_id"])
+            self.assertIn("G2-test-r1", result["conditions"]["G2"]["run_id"])
+            self.assertTrue((root / "metrics-all.json").exists())
 
     def test_freeze_rejects_missing_required_development_run(self):
         for missing in ("G2-dev-r1", "D1-dev-r1"):

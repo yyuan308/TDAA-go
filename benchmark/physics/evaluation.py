@@ -14,12 +14,13 @@ TRANSCRIPT_SUBSET_CONDITIONS = ("G3", "D2")
 
 
 def evaluate_conditions(benchmark_root: Path, split: str) -> dict[str, Any]:
+    if split not in {"dev", "test", "all"}:
+        raise ValueError(f"unsupported evaluation split: {split}")
     split_data = json.loads(
         (benchmark_root / "manifest" / "split.json").read_text(encoding="utf-8")
     )
-    split_key = "development_student_ids" if split == "dev" else "heldout_student_ids"
-    full_ids = split_data[split_key]
-    transcript_ids = split_data["transcript_gold"][split_key]
+    full_ids = _split_student_ids(split_data, split)
+    transcript_ids = _split_student_ids(split_data["transcript_gold"], split)
     config = _load_config()
     gold = _load_scores(
         benchmark_root / "gold" / "primary_scores.csv", set(full_ids)
@@ -35,9 +36,9 @@ def evaluate_conditions(benchmark_root: Path, split: str) -> dict[str, Any]:
     conditions: dict[str, Any] = {}
     prediction_sets: dict[str, dict[tuple[str, str], float]] = {}
     for condition in (*FULL_SPLIT_CONDITIONS, *TRANSCRIPT_SUBSET_CONDITIONS):
-        run_id = _run_id(condition, split)
-        run_dir = benchmark_root / "runs" / run_id
-        if not run_dir.exists():
+        run_ids = _run_ids(condition, split)
+        run_dirs = [benchmark_root / "runs" / run_id for run_id in run_ids]
+        if any(not run_dir.exists() for run_dir in run_dirs):
             continue
         student_ids = full_ids if condition in FULL_SPLIT_CONDITIONS else transcript_ids
         expected_keys = {
@@ -46,17 +47,28 @@ def evaluate_conditions(benchmark_root: Path, split: str) -> dict[str, Any]:
             for question_id in QUESTION_IDS
         }
         condition_gold = {key: value for key, value in gold.items() if key in expected_keys}
-        predictions = _load_scores(run_dir / "predictions.csv", set(student_ids))
+        predictions: dict[tuple[str, str], float] = {}
+        for run_dir in run_dirs:
+            run_predictions = _load_scores(
+                run_dir / "predictions.csv", set(student_ids)
+            )
+            duplicates = set(predictions) & set(run_predictions)
+            if duplicates:
+                raise ValueError(
+                    f"combined runs contain duplicate predictions: {sorted(duplicates)}"
+                )
+            predictions.update(run_predictions)
+        run_label = "+".join(run_ids)
         if set(predictions) != expected_keys:
             missing = sorted(expected_keys - set(predictions))
             extra = sorted(set(predictions) - expected_keys)
             raise ValueError(
-                f"{run_id} predictions do not match expected split; "
+                f"{run_label} predictions do not match expected split; "
                 f"missing={missing}, extra={extra}"
             )
         prediction_sets[condition] = predictions
         conditions[condition] = {
-            "run_id": run_id,
+            "run_id": run_label,
             "n_students": len(student_ids),
             "population": (
                 "full_split"
@@ -80,6 +92,42 @@ def evaluate_conditions(benchmark_root: Path, split: str) -> dict[str, Any]:
                 samples=config["bootstrap_samples"],
             )
 
+    transcript_comparisons = {}
+    subset_keys = {
+        (student_id, question_id)
+        for student_id in transcript_ids
+        for question_id in QUESTION_IDS
+    }
+    subset_gold = {key: value for key, value in gold.items() if key in subset_keys}
+    for label, automatic_condition, human_condition in (
+        ("GPT", "G2", "G3"),
+        ("DeepSeek", "D1", "D2"),
+    ):
+        if automatic_condition not in prediction_sets or human_condition not in prediction_sets:
+            continue
+        automatic = {
+            key: value
+            for key, value in prediction_sets[automatic_condition].items()
+            if key in subset_keys
+        }
+        human = prediction_sets[human_condition]
+        automatic_metrics = evaluate_scores(subset_gold, automatic)
+        human_metrics = evaluate_scores(subset_gold, human)
+        transcript_comparisons[label] = {
+            "automatic_condition": automatic_condition,
+            "human_condition": human_condition,
+            "n_students": len(transcript_ids),
+            "automatic_exact_agreement": automatic_metrics["exact_agreement"],
+            "human_exact_agreement": human_metrics["exact_agreement"],
+            "human_minus_automatic": paired_student_bootstrap(
+                subset_gold,
+                automatic,
+                human,
+                seed=config["split_seed"],
+                samples=config["bootstrap_samples"],
+            ),
+        }
+
     excluded_runs = [
         run_id
         for run_id in config["excluded_run_ids"]
@@ -91,6 +139,7 @@ def evaluate_conditions(benchmark_root: Path, split: str) -> dict[str, Any]:
         "excluded_runs": excluded_runs,
         "conditions": conditions,
         "paired_vs_g0": paired_vs_g0,
+        "transcript_subset_comparisons": transcript_comparisons,
     }
     (benchmark_root / f"metrics-{split}.json").write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -131,10 +180,22 @@ def freeze_revised_workflow(benchmark_root: Path, candidate: str) -> dict[str, A
     return freeze
 
 
-def _run_id(condition: str, split: str) -> str:
+def _run_ids(condition: str, split: str) -> list[str]:
     if condition == "G0":
-        return "G0-all-r1"
-    return f"{condition}-{split}-r1"
+        return ["G0-all-r1"]
+    if split == "all":
+        return [f"{condition}-dev-r1", f"{condition}-test-r1"]
+    return [f"{condition}-{split}-r1"]
+
+
+def _split_student_ids(split_data: dict[str, Any], split: str) -> list[str]:
+    if split == "dev":
+        return list(split_data["development_student_ids"])
+    if split == "test":
+        return list(split_data["heldout_student_ids"])
+    return list(split_data["development_student_ids"]) + list(
+        split_data["heldout_student_ids"]
+    )
 
 
 def _load_scores(path: Path, student_ids: set[str]) -> dict[tuple[str, str], float]:
