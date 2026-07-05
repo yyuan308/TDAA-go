@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Utility scripts for TDAA-Go bootstrap (reference ingestion)"
 requires-python = ">=3.10"
 dependencies = [
+    "openai>=1.70",
+    "Pillow>=10.0",
     "pymupdf>=1.24",
     "python-pptx>=1.0",
     "python-docx>=1.1",
@@ -14,3 +16,8 @@ dependencies = [
 convert-references = "scripts.convert_references:main"
 scan-references = "scripts.scan_references:main"
 extract-metadata = "scripts.extract_metadata:main"
+physics-benchmark = "benchmark.physics.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["scripts*", "benchmark*"]
+exclude = ["Data*", "tmp*", "reference*", "templates*", "coursedesign*", "tests*"]
