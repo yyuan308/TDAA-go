@@ -60,14 +60,31 @@ running them. Notes on package naming:
 
 ## Workflow
 
-Skill root: `~/.claude/skills/grade-homework/`. Run helper scripts from that root.
+Skill root: the directory containing this `SKILL.md`. Resolve scripts and
+references relative to that directory; do not assume a Claude- or Codex-specific
+home path.
+
+### Benchmark-informed safeguards
+
+The Physics Week 9 internal benchmark does not prove that transcript workflows
+are generally better than the direct-image baseline. Treat transcript or OCR
+steps as optional evidence aids, not as an automatic accuracy improvement.
+
+Before grading, freeze the page ordering, rubric, question IDs, point ranges,
+and quarter-point rules. During grading, use an evidence-first pass: record the
+visible equation, statement, text, or blank-answer marker before assigning
+points. Run a second-pass review for low confidence, unreadable regions, blank
+or apparently missing answers, total mismatches, and high-impact deductions.
+At handoff, report flagged items and which questions they concentrate on; ask
+the teacher to spot-check at least 3 students and all flagged items before
+publishing grades.
 
 ### Step 1 — Discover
 
 Run `discover.py` on the working directory containing submissions. Parse the JSON:
 
 ```bash
-python ~/.claude/skills/grade-homework/scripts/discover.py "$PWD"
+python <skill_root>/scripts/discover.py "$PWD"
 ```
 
 If `solutions_error` is non-null, surface it to the user and stop. If the user passed a solutions path explicitly, use that instead of auto-discovery.
@@ -76,15 +93,19 @@ If `solutions_error` is non-null, surface it to the user and stop. If the user p
 
 ### Step 2 — Load the grading prompt and parse the rubric
 
-Read `~/.claude/skills/grade-homework/references/grading-prompt.md` and follow it.
+Read `<skill_root>/references/grading-prompt.md` and follow it.
 
 Convert the solutions file to page images:
 
 ```bash
-python ~/.claude/skills/grade-homework/scripts/to_images.py <solutions_file> /tmp/grade-homework/solutions/
+python <skill_root>/scripts/to_images.py <solutions_file> /tmp/grade-homework/solutions/
 ```
 
-View the solutions images, parse the `[N pts]` allocations into a rubric table, and **confirm with the user before continuing**. If no `[N pts]` markers are found, stop and ask for point allocations.
+View the solutions images, verify deterministic **page ordering**, parse the
+`[N pts]` allocations into a rubric table, and **confirm with the user before
+continuing**. Freeze the page list, rubric, question IDs, point ranges, and
+quarter-point rules before grading. If no `[N pts]` markers are found, stop and
+ask for point allocations.
 
 ### Step 3 — Grade students one at a time
 
@@ -93,24 +114,44 @@ For each student (in alphabetical order unless the user specifies otherwise):
 1. Convert each of that student's files to images:
 
    ```bash
-   python ~/.claude/skills/grade-homework/scripts/to_images.py "<student_file>" /tmp/grade-homework/<student>/
+   python <skill_root>/scripts/to_images.py "<student_file>" /tmp/grade-homework/<student>/
    ```
 
    If any file returns exit code 3 (`docx_unsupported`), include a `needs_manual_review` flag for that student and skip that file — do not block the whole run.
 
-2. View the student's page images and score per the grading prompt. Produce the JSON record.
+2. Verify page ordering and question-to-page coverage before reading answers.
+   Missing, duplicated, rotated, or unreadable pages require an explicit flag.
 
-3. Pipe the record into `write_outputs.py`:
+3. Use an evidence-first pass. For every question, record the visible equation,
+   statement, or blank-answer marker before assigning points. **Do not guess**
+   missing work or silently repair a student's reasoning.
+
+4. Score only against the frozen rubric. Validate each score against its range
+   and quarter-point increment, then recompute section and assignment totals.
+   Attach `high`, `medium`, or `low` confidence plus explicit ambiguity flags.
+
+5. Run a **second-pass** review for every low-confidence item, unreadable region,
+   blank or apparently missing answer, total mismatch, and high-impact
+   deduction. The second pass must revisit the source image and evidence, not
+   merely repeat the first score.
+
+6. Produce the JSON record only after those checks pass.
+
+7. Pipe the record into `write_outputs.py`:
 
    ```bash
-   echo "$RECORD_JSON" | python ~/.claude/skills/grade-homework/scripts/write_outputs.py "$PWD/grades"
+   echo "$RECORD_JSON" | python <skill_root>/scripts/write_outputs.py "$PWD/grades"
    ```
 
-4. After every 3 students, briefly summarize progress to the user so they can course-correct early.
+8. After every 3 students, briefly summarize progress to the user so they can course-correct early.
 
 ### Step 4 — Recovery
 
-If `grades/grades.csv` already exists at the start of a run, `write_outputs.py` will skip any student already present. To re-grade a student, delete their row from the CSV and their feedback file before running.
+If `grades/grades.csv` already exists at the start of a run, `write_outputs.py`
+will skip any student already present. Preserve immutable benchmark records:
+never overwrite a benchmark run, prompt, rubric, or prediction file. For an
+ordinary re-grade, archive the prior row and feedback before creating a clearly
+identified replacement; do not silently delete grading history.
 
 ### Step 5 — Handoff
 
@@ -128,4 +169,14 @@ When all students are graded, list:
 
 ## Quality bar
 
-This skill does single-pass grading with conservative flagging. It is **not** a substitute for teacher review — spot-check at least 3 students against your own grading before publishing, and always review flagged items.
+This skill uses evidence-first grading plus targeted second-pass review. It is
+**not** a substitute for teacher review: spot-check at least 3 students against
+your own grading before publishing, and always review flagged items.
+
+The Physics Week 9 internal benchmark used one run per condition and a single
+primary-rater reference. Its transcript-based GPT condition did not outperform
+the historical direct baseline overall, so do not claim a general accuracy
+improvement. Treat page ordering, frozen rubrics, evidence, confidence, and
+second-pass review as auditability safeguards, with extra attention to the
+lowest-agreement Physics Week 9 questions; do not generalize those error
+patterns beyond this benchmark.
